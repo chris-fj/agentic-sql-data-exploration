@@ -7,7 +7,7 @@ A Streamlit + FastAPI application. The frontend provides a chat-style text inter
 ```bash
 uv sync
 uv run uvicorn backend.app:app --reload &   # backend on :8000
-uv run sql-agent-frontend                    # frontend on :8501
+uv run streamlit run src/frontend/app.py    # frontend on :8501
 ```
 
 ## Version bumping
