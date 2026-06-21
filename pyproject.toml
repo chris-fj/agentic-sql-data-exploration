@@ -1,7 +1,7 @@
 [project]
-name = "sql-agent"
+name = "agentic-sql-data-exploration"
 version = "0.1.0"
-description = "Add your description here"
+description = "Proof of concept for agentic data exploration with a chatbot"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
