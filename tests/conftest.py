@@ -7,9 +7,24 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _isolate_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Remove LLM_* env vars from the test environment so that local ``.env``
-    files don't leak into tests."""
-    for key in ("LLM_MODEL_NAME", "LLM_ENDPOINT", "LLM_API_KEY",
-                 "LLM_TEMPERATURE", "LLM_MAX_TOKENS", "LLM_TIMEOUT",
-                 "LLM_MAX_RETRIES"):
+    """Remove LLM-related env vars from the test environment so that local
+    ``.env`` files don't leak into tests."""
+    for key in (
+        # Cloud backend
+        "CLOUD_MODEL",
+        "CLOUD_API_ENDPOINT",
+        "CLOUD_API_KEY",
+        "CLOUD_TEMPERATURE",
+        "CLOUD_MAX_TOKENS",
+        "CLOUD_TIMEOUT",
+        "CLOUD_MAX_RETRIES",
+        # Local backend
+        "LOCAL_MODEL",
+        "LOCAL_API_ENDPOINT",
+        "LOCAL_API_KEY",
+        "LOCAL_TEMPERATURE",
+        "LOCAL_MAX_TOKENS",
+        "LOCAL_TIMEOUT",
+        "LOCAL_MAX_RETRIES",
+    ):
         monkeypatch.delenv(key, raising=False)
