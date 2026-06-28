@@ -44,8 +44,6 @@ LOCAL_MAX_RETRIES : int, optional
     ``max_retries`` parameter.
 """
 
-from __future__ import annotations
-
 import os
 from typing import Literal
 
@@ -180,25 +178,63 @@ def get_llm(
     LOCAL_MODEL, LOCAL_API_ENDPOINT, LOCAL_API_KEY
     LOCAL_TEMPERATURE, LOCAL_MAX_TOKENS, LOCAL_TIMEOUT, LOCAL_MAX_RETRIES
     """
+
+    if type_ not in ["cloud", "local"]:
+        raise ValueError(f"Unknown LLM type: {type_!r}.  Expected 'local' or 'cloud'.")
+
     if type_ == "cloud":
-        return get_cloud_llm(
-            model_name=os.getenv("CLOUD_MODEL", "deepseek-chat"),
-            endpoint=os.getenv("CLOUD_API_ENDPOINT", "https://api.deepseek.com/v1"),
-            api_key=os.getenv("CLOUD_API_KEY", ""),
+        cloud_model = os.getenv("CLOUD_MODEL", None)
+        cloud_api_endpoint = os.getenv("CLOUD_API_ENDPOINT", None)
+        cloud_api_key = os.getenv("CLOUD_API_KEY", None)
+
+        missing_mandatory_variables = dict(
+            zip(
+                ["CLOUD_MODEL", "CLOUD_API_ENDPOINT", "CLOUD_API_KEY"],
+                [
+                    cloud_model is None,
+                    cloud_api_endpoint is None,
+                    cloud_api_key is None,
+                ],
+            )
+        )
+
+        llm = get_cloud_llm(
+            model_name=os.getenv("CLOUD_MODEL", cloud_model),
+            endpoint=os.getenv("CLOUD_API_ENDPOINT", cloud_api_endpoint),
+            api_key=os.getenv("CLOUD_API_KEY", cloud_api_key),
             temperature=float(os.getenv("CLOUD_TEMPERATURE", "0.0")),
-            max_tokens=int(os.getenv("CLOUD_MAX_TOKENS", "4096")),
-            timeout=float(os.getenv("CLOUD_TIMEOUT", "60.0")),
+            max_tokens=int(os.getenv("CLOUD_MAX_TOKENS", "-1")),
+            timeout=float(os.getenv("CLOUD_TIMEOUT", "-1")),
             max_retries=int(os.getenv("CLOUD_MAX_RETRIES", "2")),
         )
 
     if type_ == "local":
-        return get_local_llm(
-            model_name=os.getenv("LOCAL_MODEL", "llama3.1:8b"),
-            endpoint=os.getenv("LOCAL_API_ENDPOINT", "http://localhost:11434"),
-            api_key=os.getenv("LOCAL_API_KEY", ""),
-            temperature=float(os.getenv("LOCAL_TEMPERATURE", "0.0")),
-            max_tokens=int(os.getenv("LOCAL_MAX_TOKENS", "4096")),
-            timeout=float(os.getenv("LOCAL_TIMEOUT", "60.0")),
+        local_model = os.getenv("LOCAL_MODEL", None)
+        local_api_endpoint = os.getenv("LOCAL_API_ENDPOINT", None)
+
+        missing_mandatory_variables = dict(
+            zip(
+                ["LOCAL_MODEL", "LOCAL_API_ENDPOINT"],
+                [local_model is None, local_api_endpoint is None],
+            )
         )
 
-    raise ValueError(f"Unknown LLM type: {type_!r}.  Expected 'local' or 'cloud'.")
+        llm = get_local_llm(
+            model_name=os.getenv("LOCAL_MODEL", local_model),
+            endpoint=os.getenv("LOCAL_API_ENDPOINT", local_api_endpoint),
+            api_key=os.getenv("LOCAL_API_KEY", ""),
+            temperature=float(os.getenv("LOCAL_TEMPERATURE", "0.0")),
+            max_tokens=int(os.getenv("LOCAL_MAX_TOKENS", "-1")),
+            timeout=float(os.getenv("LOCAL_TIMEOUT", "-1")),
+        )
+
+    missing_mandatory_varnames = [
+        varname
+        for varname, is_varname_missing in missing_mandatory_variables.items()
+        if is_varname_missing
+    ]
+
+    if any(missing_mandatory_variables.values()):
+        raise OSError(
+            f"Required environment variable(s) {', '.join(missing_mandatory_varnames)} not set."
+        )
