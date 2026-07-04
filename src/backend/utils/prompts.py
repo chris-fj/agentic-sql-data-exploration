@@ -35,7 +35,7 @@ Respond in {{ output_format }} format.
 {%- endfor %}"""
 )
 
-def clarify_user_intent(
+async def clarify_user_intent(
     raw_query: str,
     llm_type: str | None = None,
 ) -> ClarifyingUserIntent:
@@ -51,14 +51,15 @@ def clarify_user_intent(
     {raw_query}
     """
 
-    user_prompt_clarified = response = httpx.post(
-        f"{BACKEND_URL}/api/structured-llm",
-        json={
-            "prompt": enhancing_prompt,
-            "output_structure": ClarifyingUserIntent.model_json_schema(),
-        },
-        timeout=60,
-    )
+    async with httpx.AsyncClient() as client:
+        user_prompt_clarified = response = await client.post(
+            f"{BACKEND_URL}/api/structured-llm",
+            json={
+                "prompt": enhancing_prompt,
+                "output_structure": ClarifyingUserIntent.model_json_schema(),
+            },
+            timeout=60,
+        )
 
     structured_answer = json.loads(user_prompt_clarified.json()["output"])
 
