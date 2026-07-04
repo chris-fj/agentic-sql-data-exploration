@@ -97,6 +97,7 @@ def get_cloud_llm(
         max_tokens=max_tokens,
         timeout=timeout,
         max_retries=max_retries,
+        model_kwargs={"extra_body": {"thinking": {"type": "disabled"}}},
     )
 
 
@@ -237,5 +238,5 @@ def get_llm(
     if any(missing_mandatory_variables.values()):
         raise OSError(
             f"Required environment variable(s) {', '.join(missing_mandatory_varnames)} not set."
-        ) 
+        )
     return llm

@@ -15,15 +15,13 @@ if submitted:
         st.warning("Please enter some text before submitting.")
     else:
         try:
-            with st.spinner("Generating LLM response..."):
-                response = httpx.post(
-                    f"{BACKEND_URL}/api/call_structured_llm",
-                    json={"prompt": user_text},
-                    timeout=60,
-                )
+            with st.spinner("Understanding your request"):
+                response = clarify_user_intent(raw_prompt, "cloud")
+            
             response.raise_for_status()
             data = response.json()
-            st.code(f"**LLM response:** {data['output']}", language=None)
+            st.info("**LLM response**")
+            st.code(data["output"], language=None)
         except httpx.ConnectError as e:
             st.write(e)
             st.error(

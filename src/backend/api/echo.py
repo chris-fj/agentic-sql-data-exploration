@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
-from .request_model import EchoRequest
-from .response_model import EchoResponse
+from backend.api.model.request_model import EchoRequest
+from backend.api.model.response_model import EchoResponse
 
 router = APIRouter()
 

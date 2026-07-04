@@ -10,4 +10,4 @@ class EchoRequest(BaseModel):
 class LLMRequest(BaseModel):
     llm: Literal["local", "cloud"] = "cloud"
     prompt: str
-    structure_output: dict | None = None
+    output_structure: dict | None = None
