@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+
+from .api.echo import router as echo_router
+from .api.llm import router as llm_router
 
 app = FastAPI(title="SQL Agent Backend")
 
@@ -12,16 +14,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-class EchoRequest(BaseModel):
-    text: str
-
-
-class EchoResponse(BaseModel):
-    echo: str
-
-
-@app.post("/api/echo", response_model=EchoResponse)
-async def echo(request: EchoRequest) -> EchoResponse:
-    """Echo back the text sent by the client."""
-    return EchoResponse(echo=request.text)
+app.include_router(echo_router, prefix="/api")
+app.include_router(llm_router, prefix="/api")

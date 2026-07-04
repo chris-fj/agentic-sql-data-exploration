@@ -1,3 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "bump-my-version>=1.0.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.25.0",
+    "pytest-mock>=3.14.0",
+    "black>26",
+    "isort>8",
+    "jupyterlab>=4.6",
+]
+
 [project]
 name = "agentic-sql-data-exploration"
 version = "0.1.0"
@@ -13,25 +28,8 @@ dependencies = [
     "langchain-deepseek>=0.1.0",
     "langchain-ollama>=0.2.0",
     "python-dotenv>=1.0.0",
+    "jinja2>=3.1.0",
 ]
-
-[dependency-groups]
-dev = [
-    "bump-my-version>=1.0.0",
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.25.0",
-    "pytest-mock>=3.14.0",
-    "black>26",
-    "isort>8"
-]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]
-asyncio_mode = "auto"
-
-[tool.uv]
-package = false
 
 [tool.bumpversion]
 current_version = "0.1.0"
@@ -45,3 +43,13 @@ sign_tags = true
 filename = "pyproject.toml"
 search = "version = \"{current_version}\""
 replace = "version = \"{new_version}\""
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/backend"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.uv]
