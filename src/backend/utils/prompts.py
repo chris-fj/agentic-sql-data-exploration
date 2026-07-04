@@ -60,7 +60,11 @@ def clarify_user_intent(
         timeout=60,
     )
 
-    return user_prompt_clarified
+    structured_answer = json.loads(user_prompt_clarified.json()["output"])
+
+    user_intent = ClarifyingUserIntent(**structured_answer)
+
+    return user_intent
 
 
 def build_enhanced_output(intent: ClarifyingUserIntent) -> str:

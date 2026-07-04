@@ -97,7 +97,7 @@ def get_cloud_llm(
         max_tokens=max_tokens,
         timeout=timeout,
         max_retries=max_retries,
-        model_kwargs={"extra_body": {"thinking": {"type": "disabled"}}},
+        extra_body={"thinking": {"type": "disabled"}},
     )
 
 
