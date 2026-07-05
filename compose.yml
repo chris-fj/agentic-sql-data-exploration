@@ -1,0 +1,44 @@
+---
+services:
+  # ------------------------------------------------------------------
+  # One-shot loader: creates / updates the DuckDB database from CSV files
+  # ------------------------------------------------------------------
+  duckdb-loader:
+    build:
+      context: .
+      dockerfile: scripts/Dockerfile.loader
+    container_name: duckdb-loader
+    volumes:
+      # CSV inputs (read-only) — no longer shadowed by the named volume
+      - ./data/:/data/:ro
+      # Shell scripts (read-only)
+      - ./scripts/:/scripts/:ro
+      # Persistent database volume — separate path from /data
+      - duckdb_data:/db
+    command: >
+      sh -c "/scripts/init_db.sh"
+    restart: "no"
+
+  # ------------------------------------------------------------------
+  # Main application: FastAPI backend + Streamlit frontend
+  # ------------------------------------------------------------------
+  sql-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sql-agent
+    ports:
+      - "8000:8000"   # FastAPI backend
+      - "8501:8501"   # Streamlit frontend
+    env_file:
+      - .env
+    volumes:
+      # Read-only access to the pre-built DuckDB database
+      - duckdb_data:/db:ro
+    depends_on:
+      duckdb-loader:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  duckdb_data:
