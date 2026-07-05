@@ -1,0 +1,18 @@
+# =============================================================================
+# DuckDB Loader — Debian-slim image with the DuckDB CLI + a shell.
+#
+# The official duckdb/duckdb image uses gcr.io/distroless/cc-debian12 (glibc);
+# it contains ONLY the duckdb binary — no shell, no coreutils.  We need sh,
+# md5sum, awk, etc. for the idempotent init script.
+#
+# We copy the duckdb binary out of the official image into a Debian-slim base
+# (same libc) so it runs without recompilation, while giving us a real shell.
+# =============================================================================
+
+FROM debian:bookworm-slim
+
+# Copy the duckdb CLI binary from the official image (both are glibc)
+COPY --from=duckdb/duckdb:1.5.4 /duckdb /usr/local/bin/duckdb
+
+# Verify the binary works
+RUN duckdb --version
