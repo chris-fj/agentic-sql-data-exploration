@@ -1,0 +1,26 @@
+# Version control
+.git/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment (contains secrets — NEVER in the image)
+.env
+.venv/
+.vscode/
+
+# Build artifacts
+*.egg-info/
+build/
+dist/
+wheels/
+
+# Dev only
+tests/
+.pytest_cache/
+*.ipynb
+README.md
+main.py
+data/

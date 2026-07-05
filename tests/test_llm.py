@@ -219,22 +219,32 @@ class TestGetLLM:
     def test_cloud_falls_back_to_defaults(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """When no ``CLOUD_*`` variables are set, ``get_llm`` should use the
-        documented defaults.  The ``_isolate_env`` fixture purges all env vars
-        beforehand."""
+        """When only mandatory ``CLOUD_*`` variables are set, ``get_llm``
+        forwards sentinel values for the optional parameters so that
+        ``get_cloud_llm`` applies its own defaults.  The ``_isolate_env``
+        fixture purges all env vars beforehand."""
+        # Arrange — set mandatory vars so the guard passes, but leave
+        # optional vars unset.
+        _set_env(
+            monkeypatch,
+            CLOUD_MODEL="deepseek-chat",
+            CLOUD_API_ENDPOINT="https://api.deepseek.com/v1",
+            CLOUD_API_KEY="sk-test",
+        )
+
         # Act
         with patch("backend.utils.llm.get_cloud_llm") as mock_cloud:
             mock_cloud.return_value = "fake-llm"
             result = get_llm("cloud")
 
-        # Assert
+        # Assert — sentinel values indicate "use the leaf default".
         mock_cloud.assert_called_once_with(
             model_name="deepseek-chat",
             endpoint="https://api.deepseek.com/v1",
-            api_key="",
+            api_key="sk-test",
             temperature=0.0,
-            max_tokens=4096,
-            timeout=60.0,
+            max_tokens=-1,
+            timeout=-1.0,
             max_retries=2,
         )
         assert result == "fake-llm"
@@ -276,21 +286,30 @@ class TestGetLLM:
     def test_local_falls_back_to_defaults(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """When no ``LOCAL_*`` variables are set, ``get_llm`` should use the
-        documented defaults."""
+        """When only mandatory ``LOCAL_*`` variables are set, ``get_llm``
+        forwards sentinel values for the optional parameters so that
+        ``get_local_llm`` applies its own defaults."""
+        # Arrange — set mandatory vars so the guard passes, but leave
+        # optional vars unset.
+        _set_env(
+            monkeypatch,
+            LOCAL_MODEL="llama3.1:8b",
+            LOCAL_API_ENDPOINT="http://localhost:11434",
+        )
+
         # Act
         with patch("backend.utils.llm.get_local_llm") as mock_local:
             mock_local.return_value = "fake-llm"
             result = get_llm("local")
 
-        # Assert
+        # Assert — sentinel values indicate "use the leaf default".
         mock_local.assert_called_once_with(
             model_name="llama3.1:8b",
             endpoint="http://localhost:11434",
             api_key="",
             temperature=0.0,
-            max_tokens=4096,
-            timeout=60.0,
+            max_tokens=-1,
+            timeout=-1.0,
         )
         assert result == "fake-llm"
 
