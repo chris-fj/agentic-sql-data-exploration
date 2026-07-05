@@ -62,7 +62,7 @@ COPY pyproject.toml ./
 COPY src/ /app/src/
 
 # Copy and set up the entrypoint
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY ./scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 # Environment:
