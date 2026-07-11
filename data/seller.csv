@@ -1,11 +1,11 @@
-seller_id,seller_name
-u1,John Doe
-u2,Jane Doe
-u3,Bill Tack
-u4,Peter Martin
-u5,Michael Block
-u6,Denise Waters
-u7,Anna White
-u8,Mia Sears
-u9,Daniel Metters
-u0,Lina Sanders
+seller_id,territory_id,seller_name
+u1,t1,John Doe
+u2,t1,Jane Doe
+u3,t3,Bill Tack
+u4,t2,Peter Martin
+u5,t2,Michael Block
+u6,t2,Denise Waters
+u7,t1,Anna White
+u8,t1,Mia Sears
+u9,t4,Daniel Metters
+u0,t1,Lina Sanders
