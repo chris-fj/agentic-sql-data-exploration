@@ -13,6 +13,7 @@ services:
       - ./data/:/data/:ro
       # Shell scripts (read-only)
       - ./scripts/:/scripts/:ro
+      - ./logs:/logs
       # Persistent database volume — separate path from /data
       - duckdb_data:/db
     command: >
@@ -35,6 +36,8 @@ services:
     volumes:
       # Read-only access to the pre-built DuckDB database
       - duckdb_data:/db:ro
+      # Log output — accessible on host at ./logs/
+      - ./logs:/logs
     depends_on:
       duckdb-loader:
         condition: service_completed_successfully
