@@ -1,4 +1,4 @@
-.PHONY: build run
+.PHONY: build run stop
 
 IMAGE := sql-agent:latest
 CONTAINER := sql-agent
