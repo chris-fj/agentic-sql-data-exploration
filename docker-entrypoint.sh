@@ -16,7 +16,8 @@ FRONTEND_ADDRESS="${FRONTEND_ADDRESS:-0.0.0.0}"
 echo "==> Starting backend on ${BACKEND_HOST}:${BACKEND_PORT}..."
 uv run --no-project uvicorn backend.app:app \
     --host "${BACKEND_HOST}" \
-    --port "${BACKEND_PORT}" &
+    --port "${BACKEND_PORT}" \
+    --log-level info &
 UVICORN_PID=$!
 
 echo "==> Starting frontend on ${FRONTEND_ADDRESS}:${FRONTEND_PORT}..."
@@ -24,7 +25,8 @@ streamlit run src/frontend/app.py \
     --server.headless true \
     --browser.gatherUsageStats false \
     --server.port "${FRONTEND_PORT}" \
-    --server.address "${FRONTEND_ADDRESS}" &
+    --server.address "${FRONTEND_ADDRESS}" \
+    --logger.level info &
 STREAMLIT_PID=$!
 
 # ------------------------------------------------------------------

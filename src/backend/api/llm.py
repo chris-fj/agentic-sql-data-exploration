@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter
 
@@ -7,13 +8,15 @@ from backend.utils.llm import get_llm
 from backend.api.model.request_model import LLMRequest
 from backend.api.model.response_model import LLMResponse
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
 @router.post("/structured-llm", response_model=LLMResponse)
 async def call_structured_llm(request: LLMRequest) -> LLMResponse:
     """Call an LLM with an optional structured output schema."""
-    print(request)
+    logger.info("Received structured LLM request: %r", request)
     llm_instance = get_llm(request.llm)
 
     if request.output_structure is not None:
