@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 
 import httpx
@@ -7,6 +8,11 @@ from backend.utils.prompts import (
     build_enhanced_output,
     clarify_user_intent,
 )
+
+from logging_config import setup_logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
 TIMEOUT = int(os.getenv("CLOUD_TIMEOUT", 600))
