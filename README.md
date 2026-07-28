@@ -10,6 +10,13 @@ uv run uvicorn backend.app:app --reload &   # backend on :8000
 uv run streamlit run src/frontend/app.py    # frontend on :8501
 ```
 
+## The tool
+Takes user queries in natural language, understands them and converts them into SQL that is reviewed and produces an answer. The query produced query is reviewed to determine malicious or unintentedly degrading queries
+
+![prompt, summary](./imgs/img1.png)
+![table](./imgs/img2.png)
+![plot](./imgs/img3.png)
+
 ## Version bumping
 
 This project uses [bump-my-version](https://github.com/callowayproject/bump-my-version).
