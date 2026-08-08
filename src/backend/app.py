@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,10 +10,16 @@ from .api.echo import router as echo_router
 from .api.llm import router as llm_router
 from .api.sql_agent import router as sql_agent_router
 
-setup_logging()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    setup_logging()
+    yield
+
+
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="SQL Agent Backend")
+app = FastAPI(title="SQL Agent Backend", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

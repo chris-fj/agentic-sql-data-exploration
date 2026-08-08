@@ -11,8 +11,11 @@ import re
 from typing import Literal
 
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage
+from langchain_core.messages import HumanMessage
+from langchain_core.messages import ToolMessage
 
+from backend.middleware.timing import ToolTimingMiddleware
 from backend.tools import TOOLS
 from backend.utils.llm import get_llm
 
@@ -113,11 +116,10 @@ async def run_sql_agent(
         model=llm,
         tools=TOOLS,
         system_prompt=SYSTEM_PROMPT,
+        middleware=[ToolTimingMiddleware()],
     )
 
-    result = await agent.ainvoke(
-        {"messages": [HumanMessage(content=user_query)]}
-    )
+    result = await agent.ainvoke({"messages": [HumanMessage(content=user_query)]})
 
     messages = result.get("messages", [])
 
