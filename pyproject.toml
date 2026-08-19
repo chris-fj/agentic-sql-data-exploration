@@ -32,6 +32,7 @@ dependencies = [
     "duckdb>=1.5.0",
     "pandas",
     "matplotlib",
+    "sqlglot>=30.15.0",
 ]
 
 [tool.bumpversion]
@@ -54,5 +55,14 @@ packages = ["src/backend"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
+
+[tool.black]
+line-length = 88
+target-version = ["py314"]
+
+[tool.isort]
+profile = "black"
+force_single_line = true
+include_trailing_comma = true
 
 [tool.uv]
