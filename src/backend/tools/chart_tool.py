@@ -1,88 +1,58 @@
-"""Tool that generates a matplotlib chart from a SQL query result."""
+"""Chart generation helpers — plain functions, not LangChain tools.
+
+The ``generate_chart_node`` in ``backend.agents.graph`` imports these
+directly instead of going through LLM tool-calling machinery.
+"""
 
 import base64
 import io
-import os
-import re
+import logging
 
-import duckdb
 import matplotlib
-import pandas as pd
-from langchain_core.tools import tool
+import matplotlib.pyplot as plt
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
 
-DB_PATH = os.getenv("DB_PATH", "/db/sql_agent.db")
+logger = logging.getLogger(__name__)
 
-FORBIDDEN_KEYWORDS = re.compile(
-    r"\b(DROP|DELETE|INSERT|UPDATE|ALTER|CREATE|TRUNCATE|GRANT|REVOKE)\b",
-    re.IGNORECASE,
-)
-
-VALID_CHART_TYPES = {"bar", "line", "pie"}
+VALID_CHART_TYPES = frozenset({"bar", "line", "pie"})
 
 
-@tool
-def generate_chart(sql_query: str, chart_title: str, chart_type: str) -> str:
-    """Run a SQL query and generate a chart from the results.
-
-    The chart is returned as a base64-encoded PNG data URI that can be
-    rendered directly in an <img> tag or with st.image().
+def build_chart_image(
+    rows: list[dict],
+    columns: list[str],
+    chart_type: str = "bar",
+    *,
+    figsize: tuple[int, int] = (8, 5),
+    dpi: int = 100,
+) -> str:
+    """Build a matplotlib chart from rows/columns and return a base64 PNG data URI.
 
     Args:
-        sql_query: A SELECT SQL query whose results will be charted.
-            The first column is used as the x-axis / labels; the second
-            numeric column is used as the y-axis / values.
-        chart_title: Title displayed above the chart.
-        chart_type: One of "bar", "line", or "pie".
+        rows: List of row dicts (keys are column names). First column = labels,
+              second column (if present) = values.
+        columns: Ordered column names.
+        chart_type: ``"bar"``, ``"line"``, or ``"pie"``.
+        figsize: Matplotlib figure size.
+        dpi: Output resolution.
 
     Returns:
-        A base64 data URI string (data:image/png;base64,…) on success,
-        or an error message string on failure.
+        A ``data:image/png;base64,...`` string.
     """
     chart_type = chart_type.lower().strip()
     if chart_type not in VALID_CHART_TYPES:
-        return (
-            f"ERROR: Unsupported chart type '{chart_type}'. "
-            f"Choose one of: {', '.join(sorted(VALID_CHART_TYPES))}."
-        )
+        chart_type = "bar"
 
-    stripped = sql_query.strip().rstrip(";")
-
-    if FORBIDDEN_KEYWORDS.search(stripped):
-        return (
-            "ERROR: Only SELECT queries are allowed. "
-            "The query contains a forbidden keyword."
-        )
-
-    upper = stripped.upper()
-    if not upper.startswith("SELECT") and not upper.startswith("WITH"):
-        return "ERROR: Only SELECT queries are allowed."
-
-    # Run the query
-    try:
-        conn = duckdb.connect(DB_PATH, read_only=True)
-        df = conn.execute(stripped).fetchdf()
-        conn.close()
-    except Exception as exc:
-        return f"ERROR: Query failed: {exc}"
-
-    if df.empty:
-        return "ERROR: Query returned no data — nothing to chart."
-
-    # Build chart
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    labels = df.iloc[:, 0].astype(str).tolist()
+    fig, ax = plt.subplots(figsize=figsize)
+    labels = [str(row[columns[0]]) for row in rows]
 
     if chart_type == "pie":
-        values = df.iloc[:, 1]
+        values = [float(row[columns[1]]) if len(columns) > 1 else 0 for row in rows]
         ax.pie(values, labels=labels, autopct="%1.1f%%", startangle=90)
         ax.axis("equal")
     else:
         x = range(len(labels))
-        values = df.iloc[:, 1]
+        values = [float(row[columns[1]]) if len(columns) > 1 else 0 for row in rows]
         if chart_type == "bar":
             ax.bar(x, values, color="#4c72b0")
         elif chart_type == "line":
@@ -90,15 +60,15 @@ def generate_chart(sql_query: str, chart_title: str, chart_type: str) -> str:
 
         ax.set_xticks(x)
         ax.set_xticklabels(labels, rotation=45, ha="right")
-        ax.set_title(chart_title)
-        ax.set_ylabel(df.columns[1] if len(df.columns) > 1 else "")
-        ax.set_xlabel(df.columns[0] if len(df.columns) > 0 else "")
+        ax.set_ylabel(columns[1] if len(columns) > 1 else "")
+        ax.set_xlabel(columns[0] if len(columns) > 0 else "")
         fig.tight_layout()
 
-    # Encode to base64
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=100)
+    fig.savefig(buf, format="png", dpi=dpi)
     plt.close(fig)
     buf.seek(0)
     b64 = base64.b64encode(buf.read()).decode("utf-8")
+
+    logger.info("Chart built: type=%s, %d rows", chart_type, len(rows))
     return f"data:image/png;base64,{b64}"
