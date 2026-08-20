@@ -5,12 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from logging_config import setup_logging
 
+setup_logging()
+logger = logging.getLogger(__name__)
+
 from .api.echo import router as echo_router
 from .api.llm import router as llm_router
 from .api.sql_agent import router as sql_agent_router
-
-setup_logging()
-logger = logging.getLogger(__name__)
 
 app = FastAPI(title="SQL Agent Backend")
 
@@ -25,3 +25,5 @@ app.add_middleware(
 app.include_router(echo_router, prefix="/api")
 app.include_router(llm_router, prefix="/api")
 app.include_router(sql_agent_router, prefix="/api")
+
+logger.info("FastAPI application configured")
