@@ -1,4 +1,5 @@
 import logging
+
 from fastapi import APIRouter
 
 from backend.api.model.request_model import EchoRequest

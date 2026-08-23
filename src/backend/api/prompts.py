@@ -1,4 +1,4 @@
-USER_REQUEST_ENHANCING_PROMPT = f"""\
+USER_REQUEST_ENHANCING_PROMPT = """\
 You are about to receive a prompt that the user provided to send into an LLM.
 Your task is to analyze it and improve it, so that we keep all details provided by the user, but in a way that's more structured, so it's easier to understand by the LLM.
 

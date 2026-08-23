@@ -7,6 +7,7 @@ typed nodes, each using structured LLM output where applicable.
 import json
 import logging
 
+import duckdb
 from jinja2 import Template
 from langgraph.graph import (
     END,
@@ -351,7 +352,7 @@ def execute_sql_node(state: AgentState) -> dict:
 
     try:
         columns, rows = execute_query(sql_query.query, db_path=DB_PATH)
-    except Exception as exc:
+    except duckdb.Error as exc:
         logger.error("Query execution failed: %s", exc)
         return {"execution_error": f"Query execution failed: {exc}"}
 
@@ -401,7 +402,7 @@ def generate_chart_node(state: AgentState) -> dict:
         chart_image = build_chart_image(rows, columns, chart_type)
         logger.info("Chart generated (%s, %d rows)", chart_type, len(rows))
         return {"chart_image": chart_image, "chart_error": None}
-    except Exception as exc:
+    except (KeyError, IndexError, ValueError) as exc:
         logger.error("Chart generation failed: %s", exc)
         return {"chart_error": f"Chart generation failed: {exc}"}
 
