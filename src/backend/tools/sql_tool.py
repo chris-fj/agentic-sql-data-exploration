@@ -7,7 +7,6 @@ instead of going through the LLM tool-calling machinery.
 import json
 import logging
 import os
-import re
 from typing import Any
 
 import duckdb
@@ -30,13 +29,13 @@ _DANGEROUS_STATEMENT_TYPES: frozenset[type[exp.Expression]] = frozenset(
         exp.Drop,
         exp.Insert,
         exp.Update,
-        exp.Alter,         # ALTER TABLE / ALTER VIEW / …
-        exp.TruncateTable, # TRUNCATE TABLE
+        exp.Alter,  # ALTER TABLE / ALTER VIEW / …
+        exp.TruncateTable,  # TRUNCATE TABLE
         exp.Create,
         exp.Grant,
         exp.Revoke,
         exp.Merge,
-        exp.Copy,          # COPY … TO (data exfiltration)
+        exp.Copy,  # COPY … TO (data exfiltration)
     }
 )
 
@@ -101,10 +100,7 @@ def validate_sql_ast(query: str) -> str | None:
     if len(non_null) == 0:
         return "ERROR: Could not parse the SQL query — it appears to be invalid."
 
-    try:
-        tree = non_null[0]
-    except Exception:
-        return "ERROR: Could not parse the SQL query."
+    tree = non_null[0]
 
     # -- Root-type validation: only SELECT, WITH, or EXPLAIN are allowed ----
     # sqlglot parses typos like "SELEC 1" as Column, not Select — reject those.
@@ -164,8 +160,7 @@ def validate_sql_ast(query: str) -> str | None:
                 )
             if name in _BLOCKED_FUNCTIONS:
                 return (
-                    f"ERROR: The function '{node.name}' is not allowed "
-                    "in user queries."
+                    f"ERROR: The function '{node.name}' is not allowed in user queries."
                 )
 
     return None
@@ -176,7 +171,7 @@ def validate_sql_ast(query: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 # Cardinality thresholds for EXPLAIN-based rejection.
-_MAX_ROWS_ABSOLUTE = 1_000_000    # Reject anything over this regardless
+_MAX_ROWS_ABSOLUTE = 1_000_000  # Reject anything over this regardless
 _MAX_ROWS_WITHOUT_LIMIT = 10_000  # Reject without LIMIT or aggregation
 # Full-table-scan threshold: scans over this cardinality without a FILTER
 # are flagged as expensive.
@@ -198,7 +193,7 @@ def _cardinality(node: dict) -> int:
         raw = extra.get("Estimated Cardinality", "0")
         try:
             return int(raw)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return 0
     return 0
 
@@ -224,16 +219,12 @@ def _walk_plan(node: dict, *, has_limit_or_agg: bool) -> str | None:
             "Add a LIMIT clause or use aggregation (GROUP BY, COUNT, SUM, AVG)."
         )
 
-    # Detect cross-join / unqualified nested-loop join
-    if name in ("CROSS_PRODUCT", "NESTED_LOOP_JOIN"):
-        # NESTED_LOOP_JOIN is only problematic without a join condition —
-        # but we can't easily detect that from the plan alone, so we flag it
-        # as a warning only if cardinality is high.
-        if name == "CROSS_PRODUCT" or cardinality > _MAX_SCAN_CARDINALITY:
-            return (
-                "ERROR: Cross join or unqualified join detected in query plan. "
-                "Add a proper JOIN condition (ON …) between the tables."
-            )
+    # Detect cross-join
+    if name == "CROSS_PRODUCT" or cardinality > _MAX_SCAN_CARDINALITY:
+        return (
+            "ERROR: Cross join or unqualified join detected in query plan. "
+            "Add a proper JOIN condition (ON …) between the tables."
+        )
 
     # Large full table scans without filters
     if name in ("TABLE_SCAN", "SEQ_SCAN") and cardinality > _MAX_SCAN_CARDINALITY:
@@ -255,9 +246,7 @@ def _walk_plan(node: dict, *, has_limit_or_agg: bool) -> str | None:
     return None
 
 
-def estimate_query_cost(
-    query: str, db_path: str | None = None
-) -> str | None:
+def estimate_query_cost(query: str, db_path: str | None = None) -> str | None:
     """Run EXPLAIN and estimate the cost of *query* against DuckDB.
 
     Returns an error string if the query is too expensive, or ``None`` if
@@ -280,7 +269,7 @@ def estimate_query_cost(
 
     try:
         plan_json = json.loads(row[1])
-    except (json.JSONDecodeError, TypeError):
+    except json.JSONDecodeError, TypeError:
         logger.warning("Could not parse EXPLAIN output — skipping cost check")
         return None
 
@@ -288,7 +277,7 @@ def estimate_query_cost(
     try:
         tree = sqlglot.parse_one(query)
         has_limit_or_agg = _has_limit_or_aggregation(tree)
-    except Exception:
+    except (sqlglot.errors.ParseError, AttributeError, TypeError):
         has_limit_or_agg = False
 
     # Walk the plan tree

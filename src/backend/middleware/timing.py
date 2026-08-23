@@ -1,6 +1,6 @@
 """Timing utilities for graph node execution.
 
-This module provides a ``timed_node`` decorator that logs 
+This module provides a ``timed_node`` decorator that logs
 each node's start, elapsed wall-clock time, and any failures.
 It works with both sync and async node functions.
 """
@@ -42,9 +42,7 @@ def timed_node(name: str):
                     return result
                 except Exception:
                     elapsed = time.perf_counter() - start
-                    logger.exception(
-                        "[%s] failed after %.3fs", name, elapsed
-                    )
+                    logger.exception("[%s] failed after %.3fs", name, elapsed)
                     raise
 
             return async_wrapper

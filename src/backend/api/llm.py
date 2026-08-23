@@ -3,10 +3,9 @@ import logging
 
 from fastapi import APIRouter
 
-from backend.utils.llm import get_llm
-
 from backend.api.model.request_model import LLMRequest
 from backend.api.model.response_model import LLMResponse
+from backend.utils.llm import get_llm
 
 logger = logging.getLogger(__name__)
 
