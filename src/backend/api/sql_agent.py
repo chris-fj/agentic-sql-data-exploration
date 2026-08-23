@@ -5,7 +5,10 @@ import logging
 from fastapi import APIRouter
 
 from backend.agents.sql_agent import run_sql_agent
-from backend.api.model.sql_agent_models import SQLAgentRequest, SQLAgentResponse
+from backend.api.model.sql_agent_models import (
+    SQLAgentRequest,
+    SQLAgentResponse,
+)
 
 router = APIRouter()
 

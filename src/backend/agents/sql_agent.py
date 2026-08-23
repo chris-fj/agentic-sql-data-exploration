@@ -15,7 +15,10 @@ import logging
 from typing import Literal
 
 from backend.agents.graph import build_graph
-from backend.agents.state import AgentState, Report
+from backend.agents.state import (
+    AgentState,
+    Report,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +76,7 @@ async def run_sql_agent(
         return {
             "explanation": report.narrative,
             "key_findings": [
-                {"insight": f.insight, "value": f.value}
-                for f in report.key_findings
+                {"insight": f.insight, "value": f.value} for f in report.key_findings
             ],
             "recommendations": report.recommendations,
             "chart": result.get("chart_image"),

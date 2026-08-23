@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import datetime as dt
+import json
 import logging
 import os
 
@@ -13,7 +14,7 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
-TIMEOUT = int(os.getenv("CLOUD_TIMEOUT", 600))
+TIMEOUT = int(os.getenv("CLOUD_TIMEOUT", "600"))
 
 
 async def _post(url: str, payload: dict, timeout: int) -> httpx.Response:
@@ -23,7 +24,7 @@ async def _post(url: str, payload: dict, timeout: int) -> httpx.Response:
 
 st.set_page_config(page_title="SQL Agent", layout="wide")
 st.title("SQL Agent — LLM Demo")
-st.write(f"Current datetime is {dt.datetime.now()}")
+st.write(f"Current datetime is {dt.datetime.now(tz='Europe/Madrid')}")
 
 # --------------------------------------------------------------------------
 # Input form
@@ -97,5 +98,5 @@ elif submitted:
             "Could not connect to the backend. "
             "Make sure it's running with: `uv run uvicorn backend.app:app`"
         )
-    except Exception as e:
+    except (httpx.TimeoutException, httpx.HTTPStatusError, json.JSONDecodeError) as e:
         st.error(f"An error occurred: {e}")
