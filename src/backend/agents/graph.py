@@ -8,7 +8,11 @@ import json
 import logging
 
 from jinja2 import Template
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph import (
+    END,
+    START,
+    StateGraph,
+)
 
 from backend.agents.state import (
     _DATA_QUESTION_INTENTS,
@@ -51,10 +55,20 @@ These are the rules guiding your operation procedure:
 - Any source of ambiguity must be left as is, don't guess user's intent.
 - Simplify the user's request, eliminating redundancies but keep all relevant
   details.
-- Determine the type of the request: is it a question? (what is X?) is it a
-  request? (generate/research X) is it a how-to (how can I do X?) or explanation
-  (explain [the concept] X). Don't be fooled by polite request, "can you
-  generate X?" is a polite way or requesting something, not a question per se.
+- Classify the request into exactly one of these intents:
+    * data_question: the user wants a fact, value, or result found in the database
+      (e.g. "What were sales last month?", "How many transactions?").
+    * compare: the user wants a comparison between groups or time periods
+      (e.g. "Compare revenue by territory", "Q1 vs Q2").
+    * list: the user wants a ranked or enumerated set of rows
+      (e.g. "List the top 10 customers").
+    * summarize: the user wants an aggregate summary or KPIs
+      (e.g. "Summarize transaction trends", "Total sales by region").
+    * trend: the user wants a time-series view
+      (e.g. "Show monthly sales trend").
+    * other: anything that is not a data question answerable by querying the
+      database (e.g. greetings, explanations, how-to, out-of-scope requests).
+  Only choose a data intent when the answer must come from a SQL query.
 - If the user provides a fenced code block (triple backticks), indented code, or
   any long verbatim passage (quote, table, etc.), copy it exactly into
   context_blocks with the correct block_type and, for code, the language. Do not
@@ -84,8 +98,7 @@ another LLM in the best possible way, to yield the most relevant results.
 The user prompt can be found below:
 """
 
-CHAT_TEMPLATE = Template(
-    """\
+CHAT_TEMPLATE = Template("""\
 {{ core_intent }}\
 {%- if additional_instructions %}
 
@@ -110,8 +123,7 @@ Respond in {{ output_format }} format.
 {%- else -%}
 {{ block.content }}
 {%- endif %}
-{%- endfor %}"""
-)
+{%- endfor %}""")
 
 SQL_GENERATION_PROMPT = """\
 You are a data analyst with access to a DuckDB database. Write a SQL query
@@ -286,7 +298,9 @@ def validate_sql_node(state: AgentState) -> dict:
         attempts += 1
         logger.warning(
             "SQL validation failed (attempt %d/%d): %s",
-            attempts, MAX_VALIDATION_RETRIES, error,
+            attempts,
+            MAX_VALIDATION_RETRIES,
+            error,
         )
         return {
             "sql_validation_error": error,
@@ -310,10 +324,14 @@ def route_after_validation(state: AgentState) -> str:
         return "execute_sql"
 
     if attempts < MAX_VALIDATION_RETRIES:
-        logger.info("Retrying SQL generation (attempt %d/%d)", attempts, MAX_VALIDATION_RETRIES)
+        logger.info(
+            "Retrying SQL generation (attempt %d/%d)", attempts, MAX_VALIDATION_RETRIES
+        )
         return "generate_sql"
 
-    logger.error("SQL validation exhausted %d retries — routing to error report", attempts)
+    logger.error(
+        "SQL validation exhausted %d retries — routing to error report", attempts
+    )
     return "generate_report"
 
 
@@ -348,7 +366,7 @@ def route_chart(state: AgentState) -> str:
     if intent is None:
         return "generate_report"
 
-    wants = user_wants_chart(intent, state["user_query"])
+    wants = user_wants_chart(state["user_query"])
     has_data = (
         state.get("execution_error") is None
         and state.get("rows") is not None
@@ -435,8 +453,11 @@ async def generate_report_node(state: AgentState) -> dict:
     structured = llm.with_structured_output(Report)
 
     result = await structured.ainvoke(prompt)
-    logger.info("Report generated: summary=%d chars, %d findings",
-                 len(result.executive_summary), len(result.key_findings))
+    logger.info(
+        "Report generated: summary=%d chars, %d findings",
+        len(result.executive_summary),
+        len(result.key_findings),
+    )
     return {"report": result}
 
 

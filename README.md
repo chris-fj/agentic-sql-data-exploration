@@ -27,9 +27,10 @@ than raw-text tool arguments.
 ### Flow
 
 1. **clarify_intent** — The user's raw prompt is classified by an LLM into a
-   `ClarifyingUserIntent` (question, comparison, explanation, etc.).
-2. **Route** — Data questions (`question`, `compare`, `list`, `generate`)
-   enter the SQL pipeline; everything else is handled as a plain chat
+   `ClarifyingUserIntent` (`data_question`, `compare`, `list`, `summarize`,
+   `trend`, or `other`).
+2. **Route** — Data questions (`data_question`, `compare`, `list`, `summarize`,
+   `trend`) enter the SQL pipeline; `other` is handled as a plain chat
    response.
 3. **analyze_schema** — DuckDB is queried for table and column metadata.
 4. **generate_sql** — An LLM writes a SELECT-only SQL query, grounded in
