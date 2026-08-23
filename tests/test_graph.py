@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import json
 import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import (
+    AsyncMock,
+    MagicMock,
+    patch,
+)
 
 import duckdb
 import pytest
@@ -24,13 +28,12 @@ from backend.agents.state import (
     _DATA_QUESTION_INTENTS,
     AgentState,
     ClarifyingUserIntent,
+    ContextBlock,
     KeyFinding,
     Report,
     SQLQuery,
     UserIntent,
 )
-from backend.api.model.prompt_enhancing_model import ContextBlock
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -40,7 +43,7 @@ from backend.api.model.prompt_enhancing_model import ContextBlock
 @pytest.fixture
 def sample_intent() -> ClarifyingUserIntent:
     return ClarifyingUserIntent(
-        type_of_request=UserIntent.QUESTION,
+        type_of_request=UserIntent.DATA_QUESTION,
         core_intent="Show total sales by territory",
         keywords=["sales", "territory"],
         style="prose",
@@ -55,10 +58,10 @@ def sample_intent() -> ClarifyingUserIntent:
 def sample_sql_query() -> SQLQuery:
     return SQLQuery(
         query="SELECT t.territory_name, SUM(tr.amount_eur) AS total "
-              "FROM transactions tr "
-              "JOIN seller s ON tr.seller_id = s.seller_id "
-              "JOIN territory t ON s.territory_id = t.territory_id "
-              "GROUP BY t.territory_name",
+        "FROM transactions tr "
+        "JOIN seller s ON tr.seller_id = s.seller_id "
+        "JOIN territory t ON s.territory_id = t.territory_id "
+        "GROUP BY t.territory_name",
         explanation="Aggregates total sales by territory.",
     )
 
@@ -104,9 +107,9 @@ class TestRouteAfterClarify:
         state = _state(intent=intent)
         assert route_after_clarify(state) == "analyze_schema"
 
-    def test_routes_to_chat_for_explain(self):
+    def test_routes_to_chat_for_other(self):
         intent = ClarifyingUserIntent(
-            type_of_request=UserIntent.EXPLAIN,
+            type_of_request=UserIntent.OTHER,
             core_intent="Explain what DuckDB is",
             keywords=[],
         )
@@ -134,9 +137,9 @@ class TestRouteAfterClarify:
                 keywords=[],
             )
             state = _state(intent=intent)
-            assert route_after_clarify(state) == "analyze_schema", (
-                f"Expected {intent_type} to route to SQL pipeline"
-            )
+            assert (
+                route_after_clarify(state) == "analyze_schema"
+            ), f"Expected {intent_type} to route to SQL pipeline"
 
 
 # ---------------------------------------------------------------------------
@@ -208,9 +211,7 @@ class TestChatResponseNode:
 
         state = _state(intent=sample_intent)
 
-        with patch(
-            "backend.agents.graph.get_llm", return_value=mock_llm_instance
-        ):
+        with patch("backend.agents.graph.get_llm", return_value=mock_llm_instance):
             result = await chat_response_node(state)
 
         call_arg = mock_llm_instance.ainvoke.call_args[0][0]
@@ -228,9 +229,7 @@ class TestChatResponseNode:
 
         state = _state(intent=None, user_query="What is life?")
 
-        with patch(
-            "backend.agents.graph.get_llm", return_value=mock_llm_instance
-        ):
+        with patch("backend.agents.graph.get_llm", return_value=mock_llm_instance):
             result = await chat_response_node(state)
 
         call_arg = mock_llm_instance.ainvoke.call_args[0][0]
@@ -241,7 +240,7 @@ class TestChatResponseNode:
     async def test_includes_tone_and_style_in_prompt(self):
         """Non-default tone and style should appear in the enhanced prompt."""
         intent = ClarifyingUserIntent(
-            type_of_request=UserIntent.EXPLAIN,
+            type_of_request=UserIntent.OTHER,
             core_intent="Explain recursion",
             keywords=[],
             tone="technical",
@@ -255,9 +254,7 @@ class TestChatResponseNode:
 
         state = _state(intent=intent)
 
-        with patch(
-            "backend.agents.graph.get_llm", return_value=mock_llm_instance
-        ):
+        with patch("backend.agents.graph.get_llm", return_value=mock_llm_instance):
             await chat_response_node(state)
 
         call_arg = mock_llm_instance.ainvoke.call_args[0][0]
@@ -275,7 +272,7 @@ class TestClarifyIntentNode:
     async def test_returns_structured_intent(self):
         """The node should return a ClarifyingUserIntent from the LLM."""
         expected = ClarifyingUserIntent(
-            type_of_request=UserIntent.QUESTION,
+            type_of_request=UserIntent.DATA_QUESTION,
             core_intent="Show sales by territory",
             keywords=["sales", "territory"],
         )
@@ -283,9 +280,7 @@ class TestClarifyIntentNode:
         mock_structured = MagicMock()
         mock_structured.ainvoke = AsyncMock(return_value=expected)
         mock_llm = MagicMock()
-        mock_llm.with_structured_output = MagicMock(
-            return_value=mock_structured
-        )
+        mock_llm.with_structured_output = MagicMock(return_value=mock_structured)
 
         state = _state()
 
@@ -293,7 +288,7 @@ class TestClarifyIntentNode:
             result = await clarify_intent_node(state)
 
         assert result["intent"] == expected
-        assert result["intent"].type_of_request == UserIntent.QUESTION
+        assert result["intent"].type_of_request == UserIntent.DATA_QUESTION
 
 
 # ---------------------------------------------------------------------------
@@ -313,9 +308,7 @@ class TestGenerateSQLNode:
         mock_structured = MagicMock()
         mock_structured.ainvoke = AsyncMock(return_value=expected)
         mock_llm = MagicMock()
-        mock_llm.with_structured_output = MagicMock(
-            return_value=mock_structured
-        )
+        mock_llm.with_structured_output = MagicMock(return_value=mock_structured)
 
         state = _state(schema_info="- **transactions**: id, amount")
 
@@ -333,9 +326,7 @@ class TestGenerateSQLNode:
             return_value=SQLQuery(query="SELECT 1", explanation="test")
         )
         mock_llm = MagicMock()
-        mock_llm.with_structured_output = MagicMock(
-            return_value=mock_structured
-        )
+        mock_llm.with_structured_output = MagicMock(return_value=mock_structured)
 
         state = _state(schema_info="custom schema text here")
 
@@ -447,9 +438,7 @@ class TestGenerateReportNode:
         mock_structured = MagicMock()
         mock_structured.ainvoke = AsyncMock(return_value=expected)
         mock_llm = MagicMock()
-        mock_llm.with_structured_output = MagicMock(
-            return_value=mock_structured
-        )
+        mock_llm.with_structured_output = MagicMock(return_value=mock_structured)
 
         state = _state(
             rows=[
@@ -503,9 +492,7 @@ class TestGenerateReportNode:
         mock_structured = MagicMock()
         mock_structured.ainvoke = AsyncMock(return_value=expected)
         mock_llm = MagicMock()
-        mock_llm.with_structured_output = MagicMock(
-            return_value=mock_structured
-        )
+        mock_llm.with_structured_output = MagicMock(return_value=mock_structured)
 
         state = _state(
             rows=[{"territory": "Europe", "sales": 1000}],
@@ -568,13 +555,19 @@ class TestTimedNode:
             result = node({})
 
         assert result == {"result": 42}
-        assert any("test_sync" in r.message and "started" in r.message for r in caplog.records)
-        assert any("test_sync" in r.message and "completed in" in r.message for r in caplog.records)
+        assert any(
+            "test_sync" in r.message and "started" in r.message for r in caplog.records
+        )
+        assert any(
+            "test_sync" in r.message and "completed in" in r.message
+            for r in caplog.records
+        )
 
     @pytest.mark.asyncio
     async def test_async_node_logs_elapsed(self, caplog):
         """An async node decorated with @timed_node should log start and end."""
         import asyncio
+
         from backend.middleware.timing import timed_node
 
         @timed_node("test_async")
@@ -586,8 +579,13 @@ class TestTimedNode:
             result = await node({})
 
         assert result == {"result": "ok"}
-        assert any("test_async" in r.message and "started" in r.message for r in caplog.records)
-        assert any("test_async" in r.message and "completed in" in r.message for r in caplog.records)
+        assert any(
+            "test_async" in r.message and "started" in r.message for r in caplog.records
+        )
+        assert any(
+            "test_async" in r.message and "completed in" in r.message
+            for r in caplog.records
+        )
 
     def test_sync_node_logs_exception(self, caplog):
         """A sync node that raises should log the failure with elapsed time."""
@@ -601,7 +599,10 @@ class TestTimedNode:
             with pytest.raises(ValueError, match="boom"):
                 node({})
 
-        assert any("test_error" in r.message and "failed after" in r.message for r in caplog.records)
+        assert any(
+            "test_error" in r.message and "failed after" in r.message
+            for r in caplog.records
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -628,12 +629,15 @@ class TestValidateSQLAst:
     def test_passes_with_aggregation(self):
         from backend.tools.sql_tool import validate_sql_ast
 
-        assert validate_sql_ast(
-            "SELECT territory_name, SUM(amount_eur) FROM transactions "
-            "JOIN seller ON transactions.seller_id = seller.seller_id "
-            "JOIN territory ON seller.territory_id = territory.territory_id "
-            "GROUP BY territory_name"
-        ) is None
+        assert (
+            validate_sql_ast(
+                "SELECT territory_name, SUM(amount_eur) FROM transactions "
+                "JOIN seller ON transactions.seller_id = seller.seller_id "
+                "JOIN territory ON seller.territory_id = territory.territory_id "
+                "GROUP BY territory_name"
+            )
+            is None
+        )
 
     def test_rejects_drop(self):
         from backend.tools.sql_tool import validate_sql_ast
@@ -652,7 +656,9 @@ class TestValidateSQLAst:
     def test_rejects_insert(self):
         from backend.tools.sql_tool import validate_sql_ast
 
-        err = validate_sql_ast("INSERT INTO transactions VALUES (1, '2025-01-01', 1, 100)")
+        err = validate_sql_ast(
+            "INSERT INTO transactions VALUES (1, '2025-01-01', 1, 100)"
+        )
         assert err is not None
         assert "Insert" in err
 
@@ -741,9 +747,7 @@ class TestEstimateQueryCost:
     def test_cheap_query_passes(self, temp_duckdb):
         from backend.tools.sql_tool import estimate_query_cost
 
-        result = estimate_query_cost(
-            "SELECT * FROM transactions LIMIT 5"
-        )
+        result = estimate_query_cost("SELECT * FROM transactions LIMIT 5")
         assert result is None, f"Cheap query should pass, got: {result}"
 
     def test_aggregated_query_passes(self, temp_duckdb):
@@ -777,9 +781,7 @@ class TestEstimateQueryCost:
 
         # Explicit cross join with huge LIMIT — should be caught either by
         # cardinality threshold or CROSS_PRODUCT detection.
-        err = estimate_query_cost(
-            "SELECT * FROM transactions, seller"
-        )
+        err = estimate_query_cost("SELECT * FROM transactions, seller")
         assert err is not None, "Cross join without LIMIT should be rejected"
 
 
@@ -796,7 +798,10 @@ class TestRouteAfterValidation:
         assert route_after_validation(state) == "execute_sql"
 
     def test_fail_with_retries_left(self):
-        from backend.agents.graph import route_after_validation, MAX_VALIDATION_RETRIES
+        from backend.agents.graph import (
+            MAX_VALIDATION_RETRIES,
+            route_after_validation,
+        )
 
         state = _state(
             sql_validation_error="ERROR: Drop detected",
@@ -805,7 +810,10 @@ class TestRouteAfterValidation:
         assert route_after_validation(state) == "generate_sql"
 
     def test_fail_with_no_retries_left(self):
-        from backend.agents.graph import route_after_validation, MAX_VALIDATION_RETRIES
+        from backend.agents.graph import (
+            MAX_VALIDATION_RETRIES,
+            route_after_validation,
+        )
 
         state = _state(
             sql_validation_error="ERROR: Drop detected",

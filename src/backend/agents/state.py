@@ -1,12 +1,18 @@
 """State schema and structured-output models for the SQL Agent StateGraph."""
 
 from enum import Enum
-from typing import Annotated, Any, TypedDict
+from typing import (
+    Annotated,
+    Any,
+    TypedDict,
+)
 
-from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage
-from pydantic import BaseModel, Field
-
+from langgraph.graph.message import add_messages
+from pydantic import (
+    BaseModel,
+    Field,
+)
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -14,29 +20,41 @@ from pydantic import BaseModel, Field
 
 
 class UserIntent(str, Enum):
-    QUESTION = "question"
-    EXPLAIN = "explain"
-    HOWTO = "how-to"
-    SUMMARIZE = "summarize"
-    TRANSLATE = "translate"
+    DATA_QUESTION = "data_question"
     COMPARE = "compare"
     LIST = "list"
-    GENERATE = "generate"
-    CODE = "code"
+    SUMMARIZE = "summarize"
+    TREND = "trend"
     OTHER = "other"
 
 
 # Intents that should be routed through the SQL pipeline.
 _DATA_QUESTION_INTENTS = frozenset(
-    {UserIntent.QUESTION, UserIntent.COMPARE, UserIntent.LIST, UserIntent.GENERATE}
+    {
+        UserIntent.DATA_QUESTION,
+        UserIntent.COMPARE,
+        UserIntent.LIST,
+        UserIntent.SUMMARIZE,
+        UserIntent.TREND,
+    }
 )
 
 # Keywords that signal the user explicitly wants a chart.
 _CHART_KEYWORDS = frozenset(
     {
-        "chart", "plot", "graph", "visualize", "visualization",
-        "trend", "bar chart", "line chart", "pie chart",
-        "histogram", "bar", "line", "pie",
+        "chart",
+        "plot",
+        "graph",
+        "visualize",
+        "visualization",
+        "trend",
+        "bar chart",
+        "line chart",
+        "pie chart",
+        "histogram",
+        "bar",
+        "line",
+        "pie",
     }
 )
 
@@ -172,7 +190,7 @@ class AgentState(TypedDict, total=False):
     execution_error: str
 
     # ---- Chart ---------------------------------------------------------------
-    chart_image: str   # base64 PNG data URI
+    chart_image: str  # base64 PNG data URI
     chart_error: str
 
     # ---- Report --------------------------------------------------------------
@@ -180,10 +198,10 @@ class AgentState(TypedDict, total=False):
 
     # ---- Final output --------------------------------------------------------
     final_response: str  # For chat (non-data) responses.
-    final_error: str     # Catch-all error surfaced to the caller.
+    final_error: str  # Catch-all error surfaced to the caller.
 
 
-def user_wants_chart(intent: ClarifyingUserIntent, user_query: str) -> bool:
+def user_wants_chart(user_query: str) -> bool:
     """Return True if the user explicitly requested a chart or visualization."""
     query_lower = user_query.lower()
     return any(kw in query_lower for kw in _CHART_KEYWORDS)
