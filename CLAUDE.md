@@ -50,7 +50,25 @@ docker compose down -v          # also wipes the duckdb_data volume
 
 - All code must be formatted with ruff and isort, following the conventions on `pyproject.toml` (ruff at 88 lines, python 3.14, and isort with parenthesized multi-line imports and trailing commas to reduce diff noise).
 - All tests must be written observing the pattern "arrange-act-assert".
-- All functions, methods and classes must define a docstring in numpy format.
+- All functions, methods and classes must define a docstring in numpy format. This is enforced by ruff (`D101`, `D102`, `D103`). Example:
+
+  ```python
+  def add(a: int, b: int) -> int:
+      """Add two integers and return the result.
+
+      Parameters
+      ----------
+      a : int
+          The first operand.
+      b : int
+          The second operand.
+
+      Returns
+      -------
+      int
+          The sum of `a` and `b`.
+      """
+  ```
 
 ### Formatting policy
 

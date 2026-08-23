@@ -16,10 +16,10 @@ Coexists with uvicorn, Streamlit & friends via
 ``disable_existing_loggers=False`` — their own named loggers are preserved
 while the root logger picks up our handler.
 """
+
 from __future__ import annotations
 
 import logging.config
-import sys
 
 _initialized: bool = False
 
