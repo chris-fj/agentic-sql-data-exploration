@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PYTHONPATH=src DB_PATH=/tmp/test_chart.db python -c ' *)"
+    ]
+  }
+}
