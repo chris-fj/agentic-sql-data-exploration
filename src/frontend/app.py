@@ -4,6 +4,7 @@ import datetime as dt
 import json
 import logging
 import os
+from zoneinfo import ZoneInfo
 
 import httpx
 import streamlit as st
@@ -24,7 +25,7 @@ async def _post(url: str, payload: dict, timeout: int) -> httpx.Response:
 
 st.set_page_config(page_title="SQL Agent", layout="wide")
 st.title("SQL Agent — LLM Demo")
-st.write(f"Current datetime is {dt.datetime.now(tz='Europe/Madrid')}")
+st.write(f"Current datetime is {dt.datetime.now(tz=ZoneInfo('Europe/Madrid'))}")
 
 # --------------------------------------------------------------------------
 # Input form
