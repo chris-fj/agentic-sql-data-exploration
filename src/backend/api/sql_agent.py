@@ -23,11 +23,9 @@ async def call_sql_agent(request: SQLAgentRequest) -> SQLAgentResponse:
     schema-aware SQL pipeline (generate → execute → optional chart →
     structured report), and handles general chat with a plain LLM response.
     """
-    print(logger.handlers)
     logger.info(
-        "SQL agent request — llm=%s query=%s",
-        request.llm,
+        "SQL agent request — query=%s",
         request.query[:200],
     )
-    result = await run_sql_agent(request.query, request.llm)
+    result = await run_sql_agent(request.query)
     return SQLAgentResponse(**result)

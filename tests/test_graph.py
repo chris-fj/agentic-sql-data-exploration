@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import json
-import tempfile
 from unittest.mock import (
     AsyncMock,
     MagicMock,
     patch,
 )
 
-import duckdb
 import pytest
 
 from backend.agents.graph import (
@@ -28,7 +25,6 @@ from backend.agents.state import (
     _DATA_QUESTION_INTENTS,
     AgentState,
     ClarifyingUserIntent,
-    ContextBlock,
     KeyFinding,
     Report,
     SQLQuery,
@@ -70,7 +66,6 @@ def _state(**overrides: object) -> AgentState:
     """Build a minimal AgentState with sensible defaults, overridable per field."""
     defaults: dict[str, object] = {
         "user_query": "Show total sales by territory",
-        "llm_type": "cloud",
         "messages": [],
         "intent": None,
         "schema_info": None,
@@ -116,7 +111,7 @@ class TestRouteAfterClarify:
         state = _state(intent=intent)
         assert route_after_clarify(state) == "chat_response"
 
-    def test_routes_to_chat_for_other(self):
+    def test_routes_to_chat_for_other_joke(self):
         intent = ClarifyingUserIntent(
             type_of_request=UserIntent.OTHER,
             core_intent="Tell me a joke",
@@ -595,9 +590,11 @@ class TestTimedNode:
         def node(state):
             raise ValueError("boom")
 
-        with caplog.at_level("ERROR", logger="backend.middleware.timing"):
-            with pytest.raises(ValueError, match="boom"):
-                node({})
+        with (
+            caplog.at_level("ERROR", logger="backend.middleware.timing"),
+            pytest.raises(ValueError, match="boom"),
+        ):
+            node({})
 
         assert any(
             "test_error" in r.message and "failed after" in r.message
@@ -798,10 +795,7 @@ class TestRouteAfterValidation:
         assert route_after_validation(state) == "execute_sql"
 
     def test_fail_with_retries_left(self):
-        from backend.agents.graph import (
-            MAX_VALIDATION_RETRIES,
-            route_after_validation,
-        )
+        from backend.agents.graph import route_after_validation
 
         state = _state(
             sql_validation_error="ERROR: Drop detected",

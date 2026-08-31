@@ -12,7 +12,6 @@ The graph is compiled once at import time and reused across requests.
 """
 
 import logging
-from typing import Literal
 
 from backend.agents.graph import build_graph
 from backend.agents.state import (
@@ -27,16 +26,17 @@ logger = logging.getLogger(__name__)
 _graph = build_graph()
 
 
-async def run_sql_agent(
-    user_query: str, llm_type: Literal["local", "cloud"] = "cloud"
-) -> dict:
+async def run_sql_agent(user_query: str) -> dict:
     """Run the SQL exploration agent and return structured results.
 
-    Args:
-        user_query: Natural-language question about the data (or any chat prompt).
-        llm_type: ``"cloud"`` (DeepSeek) or ``"local"`` (Ollama).
+    Parameters
+    ----------
+    user_query : str
+        Natural-language question about the data (or any chat prompt).
 
-    Returns:
+    Returns
+    -------
+    dict
         A dict with keys matching the structured output:
 
         - For data questions: ``explanation`` (markdown narrative),
@@ -47,7 +47,6 @@ async def run_sql_agent(
     """
     initial: AgentState = {
         "user_query": user_query,
-        "llm_type": llm_type,
         "messages": [],
     }
 

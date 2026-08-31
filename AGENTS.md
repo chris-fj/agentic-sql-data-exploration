@@ -24,18 +24,18 @@ docker compose down -v          # also wipes the duckdb_data volume
 
 ## Architecture
 
-- Streamlit frontend (`src/frontend/app.py`) makes **one** POST to FastAPI `/api/sql-agent` (`src/backend/api/sql_agent.py`) with `{"query", "llm": "cloud"|"local"}` and renders the returned report/chart.
+- Streamlit frontend (`src/frontend/app.py`) makes **one** POST to FastAPI `/api/sql-agent` (`src/backend/api/sql_agent.py`) with `{"query"}` and renders the returned report/chart.
 - The backend runs a LangGraph `StateGraph` (`src/backend/agents/graph.py`):
   `clarify_intent → route → analyze_schema → generate_sql → validate_sql → execute_sql → (optional) generate_chart → generate_report`; non-data intents go straight to `chat_response`.
 - `validate_sql` is a security gate: sqlglot AST static analysis + DuckDB `EXPLAIN` cost analysis. Failures loop back to `generate_sql` (max 3 attempts), then fall through to an error report.
-- LLM selection: `get_llm()` in `src/backend/utils/llm.py` — `CLOUD_*` env vars → DeepSeek, `LOCAL_*` → Ollama. `.env` is loaded at import time; missing required vars raise `OSError`. See `.env.example`.
+- LLM selection: `get_llm()` in `src/backend/utils/llm.py` returns a single `langchain_openai.ChatOpenAI` configured from `LLM_MODEL`, `LLM_ENDPOINT`, `LLM_API_KEY`, and any `LLM_KWARGS__*` variables. The endpoint must be OpenAI-compatible (DeepSeek, Ollama `/v1`, vLLM, LM Studio, etc.). `.env` is loaded at import time; missing required vars raise `OSError`. See `.env.example`.
 - DuckDB is **embedded** (no server/port): opened read-only from `DB_PATH` (default `/db/sql_agent.db`).
 - `main.py` is a leftover stub, not an entrypoint.
 
 ## Gotchas
 
 - `DB_PATH` is read at import time into module-level constants (`backend.tools.sql_tool`, `backend.agents.graph`). To point code at a different DB, monkeypatch those module attributes — setting the env var later has no effect (see `temp_duckdb` fixture in `tests/conftest.py`).
-- Tests are fully mocked (LLM via `AsyncMock`/`patch`). `conftest.py` has an autouse fixture that strips all `CLOUD_*`/`LOCAL_*` env vars so a local `.env` never leaks in.
+- Tests are fully mocked (LLM via `AsyncMock`/`patch`). `conftest.py` has an autouse fixture that strips `LLM_MODEL`, `LLM_ENDPOINT`, `LLM_API_KEY`, and all `LLM_KWARGS__*` env vars so a local `.env` never leaks in.
 - isort is configured to wrap multi-name `from` imports into parentheses, one name per line with a trailing comma (`multi_line_output = 3`, `force_grid_wrap = 2`).
 - `scripts/init_db.sh` runs under **dash** in the loader container: no bashisms (no `${var:0:8}`, `[[ ]]`, `set -o pipefail`, `&>`).
 - `scripts/Dockerfile.loader` must stay Debian-based (the copied duckdb binary is glibc-linked), and the app Dockerfile must stay `python:3.14-slim` (no musllinux wheels for numpy/pandas/pyarrow on alpine).

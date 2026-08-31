@@ -15,7 +15,7 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
-TIMEOUT = int(os.getenv("CLOUD_TIMEOUT", "600"))
+TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "600"))
 
 
 async def _post(url: str, payload: dict, timeout: int) -> httpx.Response:
@@ -50,7 +50,7 @@ elif submitted:
             response = asyncio.run(
                 _post(
                     f"{BACKEND_URL}/api/sql-agent",
-                    {"query": user_text, "llm": "cloud"},
+                    {"query": user_text},
                     TIMEOUT,
                 )
             )

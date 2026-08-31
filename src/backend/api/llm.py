@@ -16,7 +16,7 @@ router = APIRouter()
 async def call_structured_llm(request: LLMRequest) -> LLMResponse:
     """Call an LLM with an optional structured output schema."""
     logger.info("Received structured LLM request: %r", request)
-    llm_instance = get_llm(request.llm)
+    llm_instance = get_llm()
 
     if request.output_structure is not None:
         structured_llm = llm_instance.with_structured_output(request.output_structure)

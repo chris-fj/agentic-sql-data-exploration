@@ -198,7 +198,7 @@ are not in the query results.
 @timed_node("clarify_intent")
 async def clarify_intent_node(state: AgentState) -> dict:
     """Analyze the user prompt and produce a structured ClarifyingUserIntent."""
-    llm = get_llm(state["llm_type"])  # type: ignore[arg-type]
+    llm = get_llm()
     structured = llm.with_structured_output(ClarifyingUserIntent)
 
     prompt = f"{CLARIFY_PROMPT}\n\n{state['user_query']}"
@@ -225,7 +225,7 @@ async def chat_response_node(state: AgentState) -> dict:
     """Generate a plain chat response for non-data questions."""
     intent = state.get("intent")
     if intent is None:
-        llm = get_llm(state["llm_type"])  # type: ignore[arg-type]
+        llm = get_llm()
         result = await llm.ainvoke(state["user_query"])
         return {"final_response": result.content}
 
@@ -238,7 +238,7 @@ async def chat_response_node(state: AgentState) -> dict:
         context_blocks=[block.model_dump() for block in intent.context_blocks],
     )
 
-    llm = get_llm(state["llm_type"])  # type: ignore[arg-type]
+    llm = get_llm()
     result = await llm.ainvoke(enhanced)
     return {"final_response": result.content}
 
@@ -272,7 +272,7 @@ async def generate_sql_node(state: AgentState) -> dict:
             f"Fix the issue described above and produce a corrected query."
         )
 
-    llm = get_llm(state["llm_type"])  # type: ignore[arg-type]
+    llm = get_llm()
     structured = llm.with_structured_output(SQLQuery)
     result = await structured.ainvoke(prompt)
 
@@ -449,8 +449,7 @@ async def generate_report_node(state: AgentState) -> dict:
         chart_status=chart_status,
     )
 
-    llm_type = state.get("llm_type", "cloud")
-    llm = get_llm(llm_type)  # type: ignore[arg-type]
+    llm = get_llm()
     structured = llm.with_structured_output(Report)
 
     result = await structured.ainvoke(prompt)

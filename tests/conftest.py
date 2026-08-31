@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import tempfile
+import os
 from pathlib import Path
 
 import duckdb
@@ -14,24 +14,15 @@ def _isolate_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Remove LLM-related env vars from the test environment so that local
     ``.env`` files don't leak into tests."""
     for key in (
-        # Cloud backend
-        "CLOUD_MODEL",
-        "CLOUD_API_ENDPOINT",
-        "CLOUD_API_KEY",
-        "CLOUD_TEMPERATURE",
-        "CLOUD_MAX_TOKENS",
-        "CLOUD_TIMEOUT",
-        "CLOUD_MAX_RETRIES",
-        # Local backend
-        "LOCAL_MODEL",
-        "LOCAL_API_ENDPOINT",
-        "LOCAL_API_KEY",
-        "LOCAL_TEMPERATURE",
-        "LOCAL_MAX_TOKENS",
-        "LOCAL_TIMEOUT",
-        "LOCAL_MAX_RETRIES",
+        "LLM_MODEL",
+        "LLM_ENDPOINT",
+        "LLM_API_KEY",
     ):
         monkeypatch.delenv(key, raising=False)
+
+    for key in list(os.environ):
+        if key.startswith("LLM_KWARGS__"):
+            monkeypatch.delenv(key, raising=False)
 
 
 @pytest.fixture

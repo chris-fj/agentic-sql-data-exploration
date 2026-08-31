@@ -166,7 +166,6 @@ class AgentState(TypedDict, total=False):
 
     # ---- Input ---------------------------------------------------------------
     user_query: str
-    llm_type: str
 
     # ---- Message history (for LangGraph compatibility) -----------------------
     messages: Annotated[list[BaseMessage], add_messages]
