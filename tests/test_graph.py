@@ -617,6 +617,10 @@ _VALID_QUERIES = [
             "GROUP BY territory_name"
         ),
     ),
+    # F6: previously-blocked harmless functions should pass
+    ("current_date", "SELECT CURRENT_DATE"),
+    ("now", "SELECT now()"),
+    ("uuid", "SELECT uuid()"),
 ]
 
 _INVALID_QUERIES = [
@@ -632,6 +636,34 @@ _INVALID_QUERIES = [
     ("update", "UPDATE transactions SET amount_eur = 0", "Update", False),
     ("truncate", "TRUNCATE TABLE transactions", "TruncateTable", False),
     ("copy", "COPY transactions TO '/tmp/data.csv'", "Copy", False),
+    # F5: context-changing statements
+    ("attach", "ATTACH 'other.db'", "Attach", False),
+    ("detach", "DETACH other", "Detach", False),
+    ("load", "LOAD inet", "LOAD", False),
+    # F5: file-reading / path-enumerating table functions
+    (
+        "read_csv_auto",
+        "SELECT * FROM read_csv_auto('/etc/passwd')",
+        "read_csv_auto",
+        False,
+    ),
+    (
+        "read_parquet",
+        "SELECT * FROM read_parquet('s3://bucket/file.parquet')",
+        "read_parquet",
+        False,
+    ),
+    ("read_json", "SELECT * FROM read_json('data.json')", "read_json", False),
+    ("read_text", "SELECT * FROM read_text('data.txt')", "read_text", False),
+    ("glob", "SELECT * FROM glob('/etc/*')", "glob", False),
+    (
+        "parquet_scan",
+        "SELECT * FROM parquet_scan('file.parquet')",
+        "parquet_scan",
+        False,
+    ),
+    ("sniff_csv", "SELECT * FROM sniff_csv('file.csv')", "sniff_csv", False),
+    # System-catalog / metadata access
     (
         "information_schema",
         "SELECT * FROM information_schema.tables",
@@ -640,7 +672,7 @@ _INVALID_QUERIES = [
     ),
     ("duckdb_meta_function", "SELECT * FROM duckdb_tables()", "duckdb_tables", False),
     ("pragma", "PRAGMA table_info('transactions')", "pragma", True),
-    ("show_tables", "SHOW TABLES", "SHOW", False),
+    ("show_tables", "SHOW TABLES", "Show", False),
     ("describe", "DESCRIBE transactions", "describe", True),
     (
         "multi_statement",
