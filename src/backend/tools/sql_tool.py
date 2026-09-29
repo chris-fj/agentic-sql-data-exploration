@@ -22,7 +22,8 @@ MAX_ROWS = 1000
 # sqlglot-based AST validation (Phase 1 — static analysis)
 # ---------------------------------------------------------------------------
 
-# Root-level AST types that represent destructive DML / DDL / DCL.
+# Root-level AST types that represent destructive DML / DDL / DCL, or that
+# change database context.
 _DANGEROUS_STATEMENT_TYPES: frozenset[type[exp.Expression]] = frozenset(
     {
         exp.Delete,
@@ -36,6 +37,9 @@ _DANGEROUS_STATEMENT_TYPES: frozenset[type[exp.Expression]] = frozenset(
         exp.Revoke,
         exp.Merge,
         exp.Copy,  # COPY … TO (data exfiltration)
+        exp.Attach,  # attach external databases
+        exp.Detach,  # detach external databases
+        exp.Show,  # SHOW TABLES / SHOW DATABASES (schema discovery)
     }
 )
 
@@ -51,12 +55,6 @@ _BLOCKED_FUNCTIONS: frozenset[str] = frozenset(
         "current_database",
         "current_schema",
         "version",
-        "current_date",
-        "current_time",
-        "current_timestamp",
-        "now",
-        "gen_random_uuid",
-        "uuid",
         "typeof",
         "txid_current",
     }
@@ -65,9 +63,22 @@ _BLOCKED_FUNCTIONS: frozenset[str] = frozenset(
 # duckdb_*() function prefix — any function starting with this exposes metadata.
 _DUCKDB_META_PREFIX = "duckdb_"
 
-# exp.Command text prefixes that indicate schema discovery (not EXPLAIN —
-# EXPLAIN is used by our own cost-analysis pass so it's not blocked here).
-_BLOCKED_COMMAND_PREFIXES: tuple[str, ...] = ("SHOW", "DESCRIBE", "LIST")
+# exp.Command text prefixes that indicate schema discovery or context changes
+# (not EXPLAIN — EXPLAIN is used by our own cost-analysis pass).
+_BLOCKED_COMMAND_PREFIXES: tuple[str, ...] = ("SHOW", "DESCRIBE", "LIST", "LOAD")
+
+# sqlglot expression types that read from the filesystem.
+_FILE_READING_TYPES: dict[type[exp.Expression], str] = {
+    exp.ReadCSV: "read_csv",
+    exp.ReadParquet: "read_parquet",
+}
+
+# Patterns and names for file-reading / path-enumerating functions that are
+# parsed as exp.Anonymous.  Block read_* and *_scan by convention; glob and
+# sniff_csv are special-cased.
+_FILE_FUNCTION_PREFIXES: tuple[str, ...] = ("read_",)
+_FILE_FUNCTION_SUFFIXES: tuple[str, ...] = ("_scan",)
+_FILE_FUNCTION_NAMES: frozenset[str] = frozenset({"glob", "sniff_csv"})
 
 
 def validate_sql_ast(query: str) -> str | None:
@@ -77,9 +88,12 @@ def validate_sql_ast(query: str) -> str | None:
 
     1. Multi-statement rejection (sql injection via ``SELECT 1; DROP …``).
     2. Destructive root statements (DROP, DELETE, INSERT, UPDATE, ALTER,
-       CREATE, TRUNCATE, GRANT, REVOKE, MERGE, COPY).
+       CREATE, TRUNCATE, GRANT, REVOKE, MERGE, COPY) and context-changing
+       statements (ATTACH, DETACH, LOAD).
     3. System-catalog access (information_schema, pg_catalog,
        ``duckdb_*()`` functions, PRAGMA, SHOW, DESCRIBE).
+    4. File-reading / path-enumerating table functions (read_csv*,
+       read_parquet, read_json*, read_text, glob, *_scan, etc.).
 
     CTE aliases named after SQL keywords (e.g. ``deleted_items``) are
     **not** flagged — they are ``Identifier`` nodes inside a ``CTE``,
@@ -88,7 +102,11 @@ def validate_sql_ast(query: str) -> str | None:
     Returns an error string if the query is rejected, or ``None`` if safe.
     """
     # -- Multi-statement check ------------------------------------------------
-    statements = sqlglot.parse(query, error_level=sqlglot.ErrorLevel.IGNORE)
+    # Parse as DuckDB so DuckDB-specific table functions (read_csv_auto,
+    # glob, etc.) are represented correctly in the AST.
+    statements = sqlglot.parse(
+        query, dialect="duckdb", error_level=sqlglot.ErrorLevel.IGNORE
+    )
     # sqlglot.parse returns [None] when it can't parse anything
     non_null = [s for s in statements if s is not None]
     if len(non_null) > 1:
@@ -102,9 +120,17 @@ def validate_sql_ast(query: str) -> str | None:
 
     tree = non_null[0]
 
-    # -- Root-type validation: only SELECT, WITH, or EXPLAIN are allowed ----
+    # -- Root-type validation: only SELECT, WITH, EXPLAIN, ATTACH, or DETACH
+    # are allowed (ATTACH/DETACH are rejected later as dangerous statements).
     # sqlglot parses typos like "SELEC 1" as Column, not Select — reject those.
-    _ALLOWED_ROOTS = (exp.Select, exp.With, exp.Command)
+    _ALLOWED_ROOTS = (
+        exp.Select,
+        exp.With,
+        exp.Command,
+        exp.Attach,
+        exp.Detach,
+        exp.Show,
+    )
     if not isinstance(tree, _ALLOWED_ROOTS):
         return (
             "ERROR: The query does not appear to be a valid SELECT statement. "
@@ -161,6 +187,27 @@ def validate_sql_ast(query: str) -> str | None:
             if name in _BLOCKED_FUNCTIONS:
                 return (
                     f"ERROR: The function '{node.name}' is not allowed in user queries."
+                )
+
+        # Category C: file-reading / path-enumerating table functions
+        node_type = type(node)
+        if node_type in _FILE_READING_TYPES:
+            func = _FILE_READING_TYPES[node_type]
+            return (
+                f"ERROR: The '{func}' function reads from the filesystem "
+                "and is not allowed in user queries."
+            )
+
+        if isinstance(node, exp.Anonymous):
+            name = (node.name or "").lower()
+            if (
+                name.startswith(_FILE_FUNCTION_PREFIXES)
+                or name.endswith(_FILE_FUNCTION_SUFFIXES)
+                or name in _FILE_FUNCTION_NAMES
+            ):
+                return (
+                    f"ERROR: The function '{node.name}' reads from the filesystem "
+                    "or enumerates paths and is not allowed in user queries."
                 )
 
     return None
