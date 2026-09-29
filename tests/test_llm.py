@@ -5,12 +5,14 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-from langchain_core.messages import AIMessage, AIMessageChunk
-from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 from langchain_deepseek import ChatDeepSeek
 from langchain_ollama import ChatOllama
 
-from backend.utils.llm import get_cloud_llm, get_llm, get_local_llm
+from backend.utils.llm import (
+    get_cloud_llm,
+    get_llm,
+    get_local_llm,
+)
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -21,6 +23,18 @@ def _set_env(monkeypatch: pytest.MonkeyPatch, **kwargs: str) -> None:
     """Set environment variables for the duration of a test."""
     for key, value in kwargs.items():
         monkeypatch.setenv(key, value)
+
+
+_CLOUD_MANDATORY = {
+    "CLOUD_MODEL": "deepseek-chat",
+    "CLOUD_API_ENDPOINT": "https://api.deepseek.com/v1",
+    "CLOUD_API_KEY": "sk-test",
+}
+
+_LOCAL_MANDATORY = {
+    "LOCAL_MODEL": "llama3.1:8b",
+    "LOCAL_API_ENDPOINT": "http://localhost:11434",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -219,9 +233,9 @@ class TestGetLLM:
     def test_cloud_falls_back_to_defaults(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """When only mandatory ``CLOUD_*`` variables are set, ``get_llm``
-        forwards sentinel values for the optional parameters so that
-        ``get_cloud_llm`` applies its own defaults.  The ``_isolate_env``
+        """When only mandatory ``CLOUD_*`` variables are set, unset optional
+        variables are omitted from the ``get_cloud_llm`` call so that the
+        leaf function's documented defaults apply.  The ``_isolate_env``
         fixture purges all env vars beforehand."""
         # Arrange — set mandatory vars so the guard passes, but leave
         # optional vars unset.
@@ -237,15 +251,11 @@ class TestGetLLM:
             mock_cloud.return_value = "fake-llm"
             result = get_llm("cloud")
 
-        # Assert — sentinel values indicate "use the leaf default".
+        # Assert — only mandatory parameters are forwarded.
         mock_cloud.assert_called_once_with(
             model_name="deepseek-chat",
             endpoint="https://api.deepseek.com/v1",
             api_key="sk-test",
-            temperature=0.0,
-            max_tokens=-1,
-            timeout=-1.0,
-            max_retries=2,
         )
         assert result == "fake-llm"
 
@@ -286,9 +296,9 @@ class TestGetLLM:
     def test_local_falls_back_to_defaults(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """When only mandatory ``LOCAL_*`` variables are set, ``get_llm``
-        forwards sentinel values for the optional parameters so that
-        ``get_local_llm`` applies its own defaults."""
+        """When only mandatory ``LOCAL_*`` variables are set, unset optional
+        variables are omitted from the ``get_local_llm`` call so that the
+        leaf function's documented defaults apply."""
         # Arrange — set mandatory vars so the guard passes, but leave
         # optional vars unset.
         _set_env(
@@ -302,14 +312,11 @@ class TestGetLLM:
             mock_local.return_value = "fake-llm"
             result = get_llm("local")
 
-        # Assert — sentinel values indicate "use the leaf default".
+        # Assert — only mandatory parameters are forwarded.
         mock_local.assert_called_once_with(
             model_name="llama3.1:8b",
             endpoint="http://localhost:11434",
             api_key="",
-            temperature=0.0,
-            max_tokens=-1,
-            timeout=-1.0,
         )
         assert result == "fake-llm"
 
@@ -321,106 +328,106 @@ class TestGetLLM:
         with pytest.raises(ValueError, match="Unknown LLM type"):
             get_llm("invalid")  # type: ignore[arg-type]
 
-
-# ---------------------------------------------------------------------------
-# Tests — mocked invocation
-# ---------------------------------------------------------------------------
-
-
-class TestLLMInvocation:
-    """Verify that LLM instances returned by the utility functions can be
-    invoked and streamed without making real network calls."""
-
-    # -- cloud invocation ----------------------------------------------------
-
-    def test_cloud_mocked_invoke_returns_ai_message(self) -> None:
-        """Mock ``_generate`` on a ``ChatDeepSeek`` instance to return a
-        controlled ``AIMessage``."""
+    def test_cloud_applies_documented_defaults(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """With mandatory variables set and optional ones unset, the
+        constructed ``ChatDeepSeek`` should carry the documented defaults."""
         # Arrange
-        chat_result = ChatResult(
-            generations=[
-                ChatGeneration(message=AIMessage(content="Hello from DeepSeek mock!")),
-            ],
-        )
-        llm = get_cloud_llm(
-            model_name="test",
-            endpoint="http://test.example.com",
-            api_key="test-key",
-        )
+        _set_env(monkeypatch, **_CLOUD_MANDATORY)
 
         # Act
-        with patch.object(llm, "_generate", return_value=chat_result):
-            result = llm.invoke("Say hello")
+        llm = get_llm("cloud")
 
         # Assert
-        assert isinstance(result, AIMessage)
-        assert result.content == "Hello from DeepSeek mock!"
+        assert isinstance(llm, ChatDeepSeek)
+        assert llm.temperature == 0.0
+        assert llm.max_tokens == 4096
+        assert llm.request_timeout == 60.0
+        assert llm.max_retries == 2
 
-    def test_cloud_mocked_stream_returns_chunks(self) -> None:
-        """Mock ``_stream`` on a ``ChatDeepSeek`` instance to yield
-        controlled ``ChatGenerationChunk`` objects."""
+    def test_local_applies_documented_defaults(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """With mandatory variables set and optional ones unset, the
+        constructed ``ChatOllama`` should carry the documented defaults."""
         # Arrange
-        chunks_in = [
-            ChatGenerationChunk(message=AIMessageChunk(content="Hello")),
-            ChatGenerationChunk(message=AIMessageChunk(content=" world!")),
-        ]
-        llm = get_cloud_llm(
-            model_name="test",
-            endpoint="http://test.example.com",
-            api_key="test-key",
-        )
+        _set_env(monkeypatch, **_LOCAL_MANDATORY)
 
         # Act
-        with patch.object(llm, "_stream", return_value=iter(chunks_in)):
-            result = list(llm.stream("Say hello"))
-
-        # Assert — at minimum the two content-bearing chunks are present.
-        assert len(result) >= 2
-        assert result[0].content == "Hello"
-        assert result[1].content == " world!"
-
-    # -- local invocation ----------------------------------------------------
-
-    def test_local_mocked_invoke_returns_ai_message(self) -> None:
-        """Mock ``_generate`` on a ``ChatOllama`` instance to return a
-        controlled ``AIMessage``."""
-        # Arrange
-        chat_result = ChatResult(
-            generations=[
-                ChatGeneration(message=AIMessage(content="Hello from Ollama mock!")),
-            ],
-        )
-        llm = get_local_llm(
-            model_name="test",
-            endpoint="http://test.example.com",
-        )
-
-        # Act
-        with patch.object(llm, "_generate", return_value=chat_result):
-            result = llm.invoke("Say hello")
+        llm = get_llm("local")
 
         # Assert
-        assert isinstance(result, AIMessage)
-        assert result.content == "Hello from Ollama mock!"
+        assert isinstance(llm, ChatOllama)
+        assert llm.temperature == 0.0
+        assert llm.num_predict == 4096
 
-    def test_local_mocked_stream_returns_chunks(self) -> None:
-        """Mock ``_stream`` on a ``ChatOllama`` instance to yield
-        controlled ``ChatGenerationChunk`` objects."""
-        # Arrange
-        chunks_in = [
-            ChatGenerationChunk(message=AIMessageChunk(content="Bonjour")),
-            ChatGenerationChunk(message=AIMessageChunk(content=" le monde!")),
-        ]
-        llm = get_local_llm(
-            model_name="test",
-            endpoint="http://test.example.com",
+
+class TestGetLLMValidationOrder:
+    """Verify that mandatory variables are validated before the model is
+    constructed, and that the error names every missing variable."""
+
+    @pytest.mark.parametrize(
+        ("backend", "leaf_module_attr", "mandatory_envs", "removed"),
+        [
+            (
+                "cloud",
+                "backend.utils.llm.get_cloud_llm",
+                _CLOUD_MANDATORY,
+                "CLOUD_MODEL",
+            ),
+            (
+                "cloud",
+                "backend.utils.llm.get_cloud_llm",
+                _CLOUD_MANDATORY,
+                "CLOUD_API_ENDPOINT",
+            ),
+            (
+                "cloud",
+                "backend.utils.llm.get_cloud_llm",
+                _CLOUD_MANDATORY,
+                "CLOUD_API_KEY",
+            ),
+            (
+                "local",
+                "backend.utils.llm.get_local_llm",
+                _LOCAL_MANDATORY,
+                "LOCAL_MODEL",
+            ),
+            (
+                "local",
+                "backend.utils.llm.get_local_llm",
+                _LOCAL_MANDATORY,
+                "LOCAL_API_ENDPOINT",
+            ),
+        ],
+        ids=[
+            "cloud-model",
+            "cloud-endpoint",
+            "cloud-api-key",
+            "local-model",
+            "local-endpoint",
+        ],
+    )
+    def test_missing_mandatory_var_raises_before_construction(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        backend: str,
+        leaf_module_attr: str,
+        mandatory_envs: dict,
+        removed: str,
+    ) -> None:
+        """Removing one mandatory variable should raise ``OSError`` naming it,
+        without ever calling the leaf constructor."""
+        # Arrange — set every mandatory variable except the one under test.
+        _set_env(
+            monkeypatch, **{k: v for k, v in mandatory_envs.items() if k != removed}
         )
 
-        # Act
-        with patch.object(llm, "_stream", return_value=iter(chunks_in)):
-            result = list(llm.stream("Say hello"))
-
-        # Assert
-        assert len(result) >= 2
-        assert result[0].content == "Bonjour"
-        assert result[1].content == " le monde!"
+        # Act & Assert
+        with (
+            patch(leaf_module_attr) as mock_leaf,
+            pytest.raises(OSError, match=removed),
+        ):
+            get_llm(backend)  # type: ignore[arg-type]
+        mock_leaf.assert_not_called()

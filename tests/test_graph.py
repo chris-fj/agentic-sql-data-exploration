@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import json
-import tempfile
 from unittest.mock import (
     AsyncMock,
     MagicMock,
     patch,
 )
 
-import duckdb
 import pytest
 
 from backend.agents.graph import (
@@ -28,7 +25,6 @@ from backend.agents.state import (
     _DATA_QUESTION_INTENTS,
     AgentState,
     ClarifyingUserIntent,
-    ContextBlock,
     KeyFinding,
     Report,
     SQLQuery,
@@ -111,15 +107,6 @@ class TestRouteAfterClarify:
         intent = ClarifyingUserIntent(
             type_of_request=UserIntent.OTHER,
             core_intent="Explain what DuckDB is",
-            keywords=[],
-        )
-        state = _state(intent=intent)
-        assert route_after_clarify(state) == "chat_response"
-
-    def test_routes_to_chat_for_other(self):
-        intent = ClarifyingUserIntent(
-            type_of_request=UserIntent.OTHER,
-            core_intent="Tell me a joke",
             keywords=[],
         )
         state = _state(intent=intent)
@@ -595,9 +582,11 @@ class TestTimedNode:
         def node(state):
             raise ValueError("boom")
 
-        with caplog.at_level("ERROR", logger="backend.middleware.timing"):
-            with pytest.raises(ValueError, match="boom"):
-                node({})
+        with (
+            caplog.at_level("ERROR", logger="backend.middleware.timing"),
+            pytest.raises(ValueError, match="boom"),
+        ):
+            node({})
 
         assert any(
             "test_error" in r.message and "failed after" in r.message
@@ -610,132 +599,94 @@ class TestTimedNode:
 # ---------------------------------------------------------------------------
 
 
-class TestValidateSQLAst:
-    def test_passes_plain_select(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        assert validate_sql_ast("SELECT * FROM transactions") is None
-
-    def test_passes_cte_named_delete(self):
-        """CTE alias 'deleted_items' is an Identifier, not exp.Delete — must pass."""
-        from backend.tools.sql_tool import validate_sql_ast
-
-        result = validate_sql_ast(
+_VALID_QUERIES = [
+    ("plain_select", "SELECT * FROM transactions"),
+    (
+        "cte_named_delete",
+        (
             "WITH deleted_items AS (SELECT * FROM transactions WHERE status = 1) "
             "SELECT * FROM deleted_items"
-        )
-        assert result is None, f"CTE named 'deleted_items' should pass, got: {result}"
+        ),
+    ),
+    (
+        "aggregation",
+        (
+            "SELECT territory_name, SUM(amount_eur) FROM transactions "
+            "JOIN seller ON transactions.seller_id = seller.seller_id "
+            "JOIN territory ON seller.territory_id = territory.territory_id "
+            "GROUP BY territory_name"
+        ),
+    ),
+]
 
-    def test_passes_with_aggregation(self):
+_INVALID_QUERIES = [
+    # (id, sql, expected_substring, case_insensitive)
+    ("drop", "DROP TABLE transactions", "Drop", False),
+    ("delete", "DELETE FROM transactions WHERE id = 1", "Delete", False),
+    (
+        "insert",
+        "INSERT INTO transactions VALUES (1, '2025-01-01', 1, 100)",
+        "Insert",
+        False,
+    ),
+    ("update", "UPDATE transactions SET amount_eur = 0", "Update", False),
+    ("truncate", "TRUNCATE TABLE transactions", "TruncateTable", False),
+    ("copy", "COPY transactions TO '/tmp/data.csv'", "Copy", False),
+    (
+        "information_schema",
+        "SELECT * FROM information_schema.tables",
+        "information_schema",
+        True,
+    ),
+    ("duckdb_meta_function", "SELECT * FROM duckdb_tables()", "duckdb_tables", False),
+    ("pragma", "PRAGMA table_info('transactions')", "pragma", True),
+    ("show_tables", "SHOW TABLES", "SHOW", False),
+    ("describe", "DESCRIBE transactions", "describe", True),
+    (
+        "multi_statement",
+        "SELECT 1; DROP TABLE transactions",
+        "Multi-statement",
+        False,
+    ),
+    ("parse_error", "SELEC 1", None, False),
+    ("current_setting", "SELECT current_setting('search_path')", None, False),
+]
+
+
+class TestValidateSQLAst:
+    """Static SQL validation should accept read-only queries and reject
+    mutating, meta, or multi-statement input."""
+
+    @pytest.mark.parametrize(
+        ("label", "sql"),
+        _VALID_QUERIES,
+        ids=[q[0] for q in _VALID_QUERIES],
+    )
+    def test_accepts_valid_queries(self, label: str, sql: str) -> None:
         from backend.tools.sql_tool import validate_sql_ast
 
-        assert (
-            validate_sql_ast(
-                "SELECT territory_name, SUM(amount_eur) FROM transactions "
-                "JOIN seller ON transactions.seller_id = seller.seller_id "
-                "JOIN territory ON seller.territory_id = territory.territory_id "
-                "GROUP BY territory_name"
-            )
-            is None
-        )
+        assert validate_sql_ast(sql) is None, f"{label} should pass"
 
-    def test_rejects_drop(self):
+    @pytest.mark.parametrize(
+        ("label", "sql", "expected", "case_insensitive"),
+        _INVALID_QUERIES,
+        ids=[q[0] for q in _INVALID_QUERIES],
+    )
+    def test_rejects_invalid_queries(
+        self,
+        label: str,
+        sql: str,
+        expected: str | None,
+        case_insensitive: bool,
+    ) -> None:
         from backend.tools.sql_tool import validate_sql_ast
 
-        err = validate_sql_ast("DROP TABLE transactions")
-        assert err is not None
-        assert "Drop" in err
-
-    def test_rejects_delete(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        err = validate_sql_ast("DELETE FROM transactions WHERE id = 1")
-        assert err is not None
-        assert "Delete" in err
-
-    def test_rejects_insert(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        err = validate_sql_ast(
-            "INSERT INTO transactions VALUES (1, '2025-01-01', 1, 100)"
-        )
-        assert err is not None
-        assert "Insert" in err
-
-    def test_rejects_update(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        err = validate_sql_ast("UPDATE transactions SET amount_eur = 0")
-        assert err is not None
-        assert "Update" in err
-
-    def test_rejects_truncate(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        err = validate_sql_ast("TRUNCATE TABLE transactions")
-        assert err is not None
-        assert "TruncateTable" in err
-
-    def test_rejects_copy(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        err = validate_sql_ast("COPY transactions TO '/tmp/data.csv'")
-        assert err is not None
-        assert "Copy" in err
-
-    def test_rejects_information_schema(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        err = validate_sql_ast("SELECT * FROM information_schema.tables")
-        assert err is not None
-        assert "information_schema" in err.lower()
-
-    def test_rejects_duckdb_meta_function(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        err = validate_sql_ast("SELECT * FROM duckdb_tables()")
-        assert err is not None
-        assert "duckdb_tables" in err
-
-    def test_rejects_pragma(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        err = validate_sql_ast("PRAGMA table_info('transactions')")
-        assert err is not None
-        assert "pragma" in err.lower()
-
-    def test_rejects_show_tables(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        err = validate_sql_ast("SHOW TABLES")
-        assert err is not None
-        assert "SHOW" in err
-
-    def test_rejects_describe(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        err = validate_sql_ast("DESCRIBE transactions")
-        assert err is not None
-        assert "describe" in err.lower()
-
-    def test_rejects_multi_statement(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        err = validate_sql_ast("SELECT 1; DROP TABLE transactions")
-        assert err is not None
-        assert "Multi-statement" in err
-
-    def test_rejects_parse_error(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        err = validate_sql_ast("SELEC 1")
-        assert err is not None
-
-    def test_rejects_current_setting(self):
-        from backend.tools.sql_tool import validate_sql_ast
-
-        err = validate_sql_ast("SELECT current_setting('search_path')")
-        assert err is not None
+        err = validate_sql_ast(sql)
+        assert err is not None, f"{label} should be rejected"
+        if expected:
+            haystack = err.lower() if case_insensitive else err
+            needle = expected.lower() if case_insensitive else expected
+            assert needle in haystack
 
 
 # ---------------------------------------------------------------------------
@@ -799,7 +750,6 @@ class TestRouteAfterValidation:
 
     def test_fail_with_retries_left(self):
         from backend.agents.graph import (
-            MAX_VALIDATION_RETRIES,
             route_after_validation,
         )
 
