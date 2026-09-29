@@ -40,12 +40,15 @@ LOCAL_TIMEOUT : float, optional
     Request timeout in seconds (default ``60.0``).
 LOCAL_MAX_RETRIES : int, optional
     Maximum retries on transient failures (default ``2``).  Note: this value
-    is read but **not** forwarded to ``ChatOllama``, which does not expose a
-    ``max_retries`` parameter.
+    is **not** forwarded to ``ChatOllama``, which does not expose a
+    ``max_retries`` parameter, so it has no effect.
 """
 
 import os
-from typing import Literal
+from typing import (
+    Any,
+    Literal,
+)
 
 from dotenv import load_dotenv
 from langchain_deepseek import ChatDeepSeek
@@ -152,10 +155,37 @@ def get_local_llm(
     return ChatOllama(**kwargs)
 
 
+def _optional_env_kwargs(*specs: tuple[str, type, str]) -> dict[str, Any]:
+    """Return kwargs for optional numeric environment variables.
+
+    Parameters
+    ----------
+    *specs : tuple[str, type, str]
+        Each item is a ``(parameter, cast, env_var)`` tuple. Only variables
+        that are actually set produce an entry, so the leaf constructor's
+        documented defaults apply for unset variables.
+
+    Returns
+    -------
+    dict[str, Any]
+        Mapping of parameter names to the cast environment values.
+    """
+    kwargs: dict[str, Any] = {}
+    for param, cast, env_var in specs:
+        if (raw := os.getenv(env_var)) is not None:
+            kwargs[param] = cast(raw)
+    return kwargs
+
+
 def get_llm(
     type_: Literal["local", "cloud"],
 ) -> ChatDeepSeek | ChatOllama:
     """Return a chat-model instance for the given backend type.
+
+    Mandatory environment variables are validated before the model is
+    constructed, so a missing mandatory variable raises ``OSError``
+    immediately. Optional variables are forwarded only when set; otherwise
+    the leaf constructor's documented defaults apply.
 
     Parameters
     ----------
@@ -171,6 +201,8 @@ def get_llm(
     ------
     ValueError
         If *type_* is not ``"local"`` or ``"cloud"``.
+    OSError
+        If a mandatory environment variable is not set.
 
     Environment variables
     ---------------------
@@ -179,64 +211,42 @@ def get_llm(
     LOCAL_MODEL, LOCAL_API_ENDPOINT, LOCAL_API_KEY
     LOCAL_TEMPERATURE, LOCAL_MAX_TOKENS, LOCAL_TIMEOUT, LOCAL_MAX_RETRIES
     """
-
     if type_ not in ["cloud", "local"]:
         raise ValueError(f"Unknown LLM type: {type_!r}.  Expected 'local' or 'cloud'.")
 
     if type_ == "cloud":
-        cloud_model = os.getenv("CLOUD_MODEL", None)
-        cloud_api_endpoint = os.getenv("CLOUD_API_ENDPOINT", None)
-        cloud_api_key = os.getenv("CLOUD_API_KEY", None)
-
-        missing_mandatory_variables = dict(
-            zip(
-                ["CLOUD_MODEL", "CLOUD_API_ENDPOINT", "CLOUD_API_KEY"],
-                [
-                    cloud_model is None,
-                    cloud_api_endpoint is None,
-                    cloud_api_key is None,
-                ],
+        mandatory = ("CLOUD_MODEL", "CLOUD_API_ENDPOINT", "CLOUD_API_KEY")
+        missing = [name for name in mandatory if os.getenv(name) is None]
+        if missing:
+            raise OSError(
+                f"Required environment variable(s) {', '.join(missing)} not set."
             )
+
+        return get_cloud_llm(
+            model_name=os.environ["CLOUD_MODEL"],
+            endpoint=os.environ["CLOUD_API_ENDPOINT"],
+            api_key=os.environ["CLOUD_API_KEY"],
+            **_optional_env_kwargs(
+                ("temperature", float, "CLOUD_TEMPERATURE"),
+                ("max_tokens", int, "CLOUD_MAX_TOKENS"),
+                ("timeout", float, "CLOUD_TIMEOUT"),
+                ("max_retries", int, "CLOUD_MAX_RETRIES"),
+            ),
         )
 
-        llm = get_cloud_llm(
-            model_name=os.getenv("CLOUD_MODEL", cloud_model),
-            endpoint=os.getenv("CLOUD_API_ENDPOINT", cloud_api_endpoint),
-            api_key=os.getenv("CLOUD_API_KEY", cloud_api_key),
-            temperature=float(os.getenv("CLOUD_TEMPERATURE", "0.0")),
-            max_tokens=int(os.getenv("CLOUD_MAX_TOKENS", "-1")),
-            timeout=float(os.getenv("CLOUD_TIMEOUT", "-1")),
-            max_retries=int(os.getenv("CLOUD_MAX_RETRIES", "2")),
-        )
+    # type_ == "local"
+    mandatory = ("LOCAL_MODEL", "LOCAL_API_ENDPOINT")
+    missing = [name for name in mandatory if os.getenv(name) is None]
+    if missing:
+        raise OSError(f"Required environment variable(s) {', '.join(missing)} not set.")
 
-    if type_ == "local":
-        local_model = os.getenv("LOCAL_MODEL", None)
-        local_api_endpoint = os.getenv("LOCAL_API_ENDPOINT", None)
-
-        missing_mandatory_variables = dict(
-            zip(
-                ["LOCAL_MODEL", "LOCAL_API_ENDPOINT"],
-                [local_model is None, local_api_endpoint is None],
-            )
-        )
-
-        llm = get_local_llm(
-            model_name=os.getenv("LOCAL_MODEL", local_model),
-            endpoint=os.getenv("LOCAL_API_ENDPOINT", local_api_endpoint),
-            api_key=os.getenv("LOCAL_API_KEY", ""),
-            temperature=float(os.getenv("LOCAL_TEMPERATURE", "0.0")),
-            max_tokens=int(os.getenv("LOCAL_MAX_TOKENS", "-1")),
-            timeout=float(os.getenv("LOCAL_TIMEOUT", "-1")),
-        )
-
-    missing_mandatory_varnames = [
-        varname
-        for varname, is_varname_missing in missing_mandatory_variables.items()
-        if is_varname_missing
-    ]
-
-    if any(missing_mandatory_variables.values()):
-        raise OSError(
-            f"Required environment variable(s) {', '.join(missing_mandatory_varnames)} not set."
-        )
-    return llm
+    return get_local_llm(
+        model_name=os.environ["LOCAL_MODEL"],
+        endpoint=os.environ["LOCAL_API_ENDPOINT"],
+        api_key=os.getenv("LOCAL_API_KEY", ""),
+        **_optional_env_kwargs(
+            ("temperature", float, "LOCAL_TEMPERATURE"),
+            ("max_tokens", int, "LOCAL_MAX_TOKENS"),
+            ("timeout", float, "LOCAL_TIMEOUT"),
+        ),
+    )
